@@ -33,7 +33,7 @@ const DICT = {
     // week
     t_assign: 'Assignment', not_open_yet: 'not open yet', t_quiz: 'Quiz', t_exam: 'Exam / mock', t_other: 'Other', week_empty: 'Nothing due this day',
     ics: 'Add to calendar', ics_hint: 'Downloads an .ics file with these deadlines, including ones only listed on course pages. For a calendar that keeps itself updated, use Learning Mall’s Export calendar.',
-    ics_lm: 'Learning Mall calendar export',
+    ics_lm: 'Learning Mall calendar export', ics_sync: 'Want it to stay in sync with Google or Apple Calendar? Subscribe via ',
     // header / editor
     h_edit: 'Customize sections', h_refresh: 'Refresh', h_settings: 'Settings',
     ed_title: 'Show, hide and reorder sections', ed_reset: 'Reset', ed_reset_q: 'Reset?', ed_done: 'Done',
@@ -87,7 +87,7 @@ const DICT = {
     k_forum: '论坛', k_announcements: '公告', k_other: '更新', grade_now: '课程总分更新为 {g}',
     t_assign: '作业', not_open_yet: '未开放', t_quiz: '测验', t_exam: '考试/模拟考', t_other: '其他', week_empty: '当天没有截止任务',
     ics: '添加到日历', ics_hint: '下载包含这些截止日期的 .ics 文件（包括只写在课程页上的）。如需自动同步的日历，请使用 Learning Mall 的日历导出。',
-    ics_lm: 'Learning Mall 日历导出',
+    ics_lm: 'Learning Mall 日历导出', ics_sync: '想和 Google 或苹果日历自动同步？用 ',
     h_edit: '自定义板块', h_refresh: '刷新', h_settings: '设置',
     ed_title: '显示、隐藏或调整板块顺序', ed_reset: '重置', ed_reset_q: '确认重置？', ed_done: '完成',
     ed_more: '仪表盘面板的布局和更多选项在', ed_settings: '设置',

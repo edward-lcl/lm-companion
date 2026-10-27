@@ -172,6 +172,7 @@ export function render(root, { snapshot, status, changes = [], settings, lastSee
         const all = classify(snapshot.deadlines, now, 365, settings);
         cal.onclick = () => downloadICS([...all.missing, ...all.upcoming]);
         s.querySelector('h3').append(cal);
+        s.append(el('p', { class: 'hint' }, t('ics_sync'), el('a', { href: 'https://core.xjtlu.edu.cn/calendar/export.php', class: 'go' }, t('ics_lm'), ' ›')));
       }
       return s;
     },
