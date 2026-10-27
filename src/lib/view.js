@@ -19,7 +19,8 @@ const fmtDue = (ms, now = Date.now()) => {
   return `${date} ${d.toLocaleDateString(locale(), { weekday: 'short' })} ${time}`;
 };
 
-const decode = (s) => { const x = document.createElement('textarea'); x.innerHTML = String(s || ''); return x.value.replace(/[\u200b-\u200d\ufeff]/g, '').replace(/\s+/g, ' ').trim(); };
+// Decode HTML entities from Moodle titles without innerHTML (DOMParser builds an inert document).
+const decode = (s) => { const x = new DOMParser().parseFromString(`<!doctype html><body>${String(s || '')}`, 'text/html').body.textContent || ''; return x.replace(/[\u200b-\u200d\ufeff]/g, '').replace(/\s+/g, ' ').trim(); };
 // Titles often repeat the due date ("Assignment 6 (Deadline: Wednesday 23:59, Oct 28)"); the meta line already shows it.
 const cleanTitle = (s) => decode(s).replace(/\s*[(（]\s*(deadline|due)[^)）]*[)）]\s*/i, ' ').trim();
 // Week chips are ~44px wide: stack the subject letters over the number so codes never truncate.

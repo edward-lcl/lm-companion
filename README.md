@@ -46,21 +46,34 @@ sign in to Learning Mall as usual, and it works. 中文 / English.
   Learning Mall functions (course list, timeline, notifications) plus the grade overview and course
   pages.
 
-## Install (developer mode, for now)
-1. Download the latest zip from Releases and unzip it, or clone this repo.
-2. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load
-   unpacked** and pick the folder.
-3. Sign in to Learning Mall once. The icon fills in within a minute.
+## Install
+Download the zip for your browser from the
+[latest release](https://github.com/edward-lcl/xjtlu-learning-mall-companion/releases/latest) and unzip it.
+
+**Chrome, Edge, Brave, Arc, Opera, Vivaldi** (the `-chrome.zip`)
+1. Open `chrome://extensions` (Edge: `edge://extensions`), turn on **Developer mode**.
+2. Click **Load unpacked** and pick the unzipped folder. Keep the folder; the browser loads from it.
+
+**Firefox, Zen, LibreWolf, Floorp** (the `-firefox.zip`)
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…** and pick `manifest.json` inside the unzipped folder.
+   Firefox removes temporary add-ons when it quits; a signed version that stays installed is coming.
+
+**Safari** is not supported yet.
+
+Then sign in to Learning Mall once. The icon fills in within a minute.
 
 ### Installing with an AI coding agent (Codex, Claude Code)
 Agents can do everything except the final click, because Chrome only lets a person load an unpacked
 extension.
-1. Download the latest release zip from
+1. Download the latest release zip for the user's browser (`-chrome.zip` for Chromium browsers,
+   `-firefox.zip` for Firefox and Zen) from
    `https://github.com/edward-lcl/xjtlu-learning-mall-companion/releases/latest` and unzip it to a stable folder the
    user won't delete (for example `~/Applications/xjtlu-learning-mall-companion`). Don't use a temp folder: Chrome
    loads the extension from that folder every time.
-2. Open `chrome://extensions` for the user and tell them to: turn on **Developer mode** (top right),
-   click **Load unpacked**, and pick that folder.
+2. Chromium: open `chrome://extensions` and tell them to turn on **Developer mode**, click **Load
+   unpacked** and pick that folder. Firefox/Zen: open `about:debugging#/runtime/this-firefox` and tell
+   them to click **Load Temporary Add-on…** and pick `manifest.json` in that folder.
 3. Tell them to open Learning Mall and sign in once, then click the toolbar icon. For Chinese, or for
    reminders, they open Settings (⚙): 语言 → 简体中文, 提醒 → 通知.
 
@@ -76,7 +89,7 @@ an MCP server with its own setup. Only install it if they ask for that.
 ```
 npm install
 npm test                 # parsers + logic; real-page fixtures are optional and stay private
-npm run build            # dist/lm-companion-<version>.zip
+npm run build            # dist/…-chrome.zip and dist/…-firefox.zip
 ```
 `test/fetch-fixtures.mjs` saves your own Learning Mall pages into `test/fixtures/private/`
 (gitignored), so the parsers are tested against real markup without publishing anyone's data.

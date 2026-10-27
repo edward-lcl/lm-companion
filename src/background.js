@@ -16,7 +16,15 @@ async function ensureOffscreen() {
     justification: 'Parse Learning Mall pages (grades, course materials) with DOMParser.' });
 }
 
+// Firefox (and Zen) run the background as an event page that has DOMParser and no offscreen API;
+// Chrome/Edge run a service worker that needs the offscreen document.
+let localParsers = null;
 async function parse(parser, html) {
+  if (!chrome.offscreen && typeof DOMParser !== 'undefined') {
+    localParsers ||= await import('./lib/moodle.js');
+    const fn = { courseModules: localParsers.parseCourseModules, gradeOverview: localParsers.parseGradeOverview }[parser];
+    return fn(html, (h) => new DOMParser().parseFromString(h, 'text/html'));
+  }
   await ensureOffscreen();
   const r = await chrome.runtime.sendMessage({ target: 'offscreen', cmd: 'parse', parser, html });
   if (!r?.ok) { const e = new Error(r?.message || 'parse failed'); e.code = r?.code; e.what = r?.what; throw e; }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "XJTLU Learning Mall Companion",
   "description": "XJTLU Learning Mall (Moodle) deadlines, daily checklist and reminders. 西浦 Learning Mall 截止日期与提醒。",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "permissions": [
     "storage",
     "alarms",
