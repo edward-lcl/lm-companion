@@ -52,10 +52,24 @@ const sections = await popup.$$eval('section h3', (hs) => hs.map((h) => h.textCo
 console.log('popup sections', sections);
 await popup.screenshot({ path: `${OUT}/popup.png`, fullPage: true });
 
+// Customize: hide Course completion, move Catch up to the top, via the popup's own editor.
+await popup.click('#edit');
+await popup.waitForSelector('ol.layout li');
+await popup.click('ol.layout li[data-id="completion"] input');
+await popup.waitForTimeout(300);
+for (let i = 0; i < 3; i++) { await popup.click('ol.layout li[data-id="catchup"] .up'); await popup.waitForTimeout(250); }
+await popup.screenshot({ path: `${OUT}/customize.png`, fullPage: true });
+await popup.click('.editbar .done');
+await popup.waitForTimeout(400);
+const order = await popup.$$eval('section[data-section]', (ss) => ss.map((s) => s.dataset.section));
+console.log('custom order', JSON.stringify(order), 'completion hidden', !order.includes('completion'), 'catchup first', order[0] === 'catchup');
+await popup.screenshot({ path: `${OUT}/popup-custom.png`, fullPage: true });
 const opts = await ctx.newPage();
 await opts.goto(`chrome-extension://${id}/src/options/options.html`);
 await opts.waitForTimeout(500);
 await opts.check('#showPanel');
+const settingsOrder = await opts.$$eval('#layout li', (ls) => ls.map((l) => l.dataset.id + (l.classList.contains('off') ? ':off' : '')));
+console.log('settings shows same layout', JSON.stringify(settingsOrder));
 await opts.waitForTimeout(400);
 await opts.screenshot({ path: `${OUT}/settings.png`, fullPage: true });
 const settings = await opts.evaluate(() => chrome.storage.local.get('settings'));

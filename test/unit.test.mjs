@@ -136,3 +136,14 @@ test('real course page: completion states and due dates are read', { skip: !fx('
   assert.ok(states.includes('done') && states.includes('todo'), JSON.stringify(states));
   assert.ok(items.some((i) => i.type === 'assign' && i.due), 'an assignment with a due date');
 });
+
+test('layout: defaults, saved order kept, unknown ids dropped, new sections appended', async () => {
+  const { resolveLayout, DEFAULT_LAYOUT } = await import('../src/lib/view.js');
+  assert.deepEqual(resolveLayout(null, 'popup'), DEFAULT_LAYOUT.popup);
+  assert.equal(resolveLayout(null, 'panel').find((x) => x.id === 'completion').on, false);
+  const saved = [{ id: 'catchup', on: true }, { id: 'gone', on: true }, { id: 'missing', on: false }];
+  const r = resolveLayout(saved, 'popup');
+  assert.deepEqual(r.slice(0, 2), [{ id: 'catchup', on: true }, { id: 'missing', on: false }]);
+  assert.ok(!r.some((x) => x.id === 'gone'));
+  assert.deepEqual(r.map((x) => x.id).sort(), ['catchup', 'changes', 'completion', 'due', 'missing']);
+});

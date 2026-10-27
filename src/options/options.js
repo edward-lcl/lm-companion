@@ -1,4 +1,5 @@
 import { getSettings } from '../lib/sync.js';
+import { resolveLayout, renderLayoutEditor } from '../lib/view.js';
 
 const storage = { get: (k) => chrome.storage.local.get(k), set: (o) => chrome.storage.local.set(o) };
 const $ = (s) => document.querySelector(s);
@@ -12,6 +13,18 @@ const save = async () => {
 
 $('#showPanel').checked = s.showPanel;
 $('#showPanel').onchange = (e) => { s.showPanel = e.target.checked; save(); };
+
+// Section layout editor (shared with the popup's Customize mode).
+let surface = 'popup';
+const drawLayout = () => renderLayoutEditor($('#layout'), resolveLayout(s.layout?.[surface], surface),
+  (list) => { s.layout = { ...(s.layout || {}), [surface]: list }; save(); drawLayout(); });
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => {
+  surface = b.dataset.surface;
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  drawLayout();
+};
+$('#resetLayout').onclick = () => { const l = { ...(s.layout || {}) }; delete l[surface]; s.layout = l; save(); drawLayout(); };
+drawLayout();
 $('#onlyModules').checked = s.onlyModules;
 $('#onlyModules').onchange = (e) => { s.onlyModules = e.target.checked; save(); };
 const hiddenLabel = () => { $('#hiddenCount').textContent = `${s.hiddenItems.length + s.doneItems.length} item(s) hidden or marked done.`; };

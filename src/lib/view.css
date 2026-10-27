@@ -2,7 +2,9 @@
 @media (prefers-color-scheme: dark) { :root { --bg: #1d1b20; --fg: #ece9f1; --muted: #a29fae; --line: #34313b; --accent: #b4a8ff; --bad: #ff8a80; --warn: #e7b25b; } }
 body.popup { width: 360px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-system, system-ui, "PingFang SC", sans-serif; background: var(--bg); color: var(--fg); }
 .popup header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); }
-.popup header button, .popup header a { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; text-decoration: none; margin-left: 8px; }
+.popup header span { display: flex; align-items: center; gap: 4px; }
+.popup header button, .popup header a { background: none; border: 0; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; text-decoration: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; }
+.popup header button:hover, .popup header a:hover { background: var(--line); color: var(--fg); }
 .popup main { padding: 4px 12px 10px; }
 .lmc section { margin: 10px 0 4px; }
 .lmc h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 4px; display: flex; gap: 6px; align-items: center; }
@@ -51,3 +53,18 @@ body.popup { width: 360px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-s
 .lmc details summary::before { content: '▸ '; color: var(--muted); }
 .lmc details[open] summary::before { content: '▾ '; }
 .lmc .hint { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
+
+ol.layout{list-style:none;padding:0;margin:0}
+ol.layout li{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg);cursor:grab}
+ol.layout li.off .txt{opacity:.5}
+ol.layout li.dragging{opacity:.4}
+ol.layout li .txt{flex:1;min-width:0}
+ol.layout li .txt small{display:block;color:var(--muted);font-size:11px}
+ol.layout li .grip{color:var(--muted);font-size:15px}
+ol.layout li button{font:inherit;font-size:14px;border:0;background:none;color:var(--muted);cursor:pointer;min-width:26px;min-height:26px;border-radius:6px}
+ol.layout li button:not(:disabled):hover{background:var(--line);color:var(--fg)}
+ol.layout li button:disabled{opacity:.25;cursor:default}
+.lmc .editbar{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
+.lmc .editbar small{color:var(--muted)}
+.lmc .editbar button{font:inherit;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:6px;padding:3px 12px;cursor:pointer}
+.lmc .editbar button.ghost{background:none;color:var(--accent);border-color:transparent}

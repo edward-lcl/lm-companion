@@ -50,7 +50,61 @@ function item(d, now, actions) {
 
 const ago = (ms, now) => { const d = Math.floor((now - ms) / 86400000); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`; };
 
-export function render(root, { snapshot, status, changes = [], settings, lastSeenAt = 0 }, { compact = false, actions = null } = {}) {
+// Sections are a registry: each has an id, a label for Settings and a builder. The user's layout
+// (per surface: popup / panel) is an ordered list of { id, on }. New sections appear automatically.
+export const SECTIONS = [
+  { id: 'missing',    label: 'Missing',           hint: 'Past due and not handled' },
+  { id: 'due',        label: 'Due soon',          hint: 'Everything with a due date in your look-ahead window' },
+  { id: 'changes',    label: 'What changed',      hint: 'New materials, grades and feedback (kinds in Settings)' },
+  { id: 'catchup',    label: 'Catch up',          hint: "Released material you haven't done or opened" },
+  { id: 'completion', label: 'Course completion', hint: 'Moodle activity completion per module' },
+];
+export const DEFAULT_LAYOUT = {
+  popup: SECTIONS.map((s) => ({ id: s.id, on: true })),
+  panel: [{ id: 'missing', on: true }, { id: 'due', on: true }, { id: 'changes', on: true },
+          { id: 'catchup', on: true }, { id: 'completion', on: false }],
+};
+// Merge a saved layout with the registry: keeps the user's order, drops unknown ids, appends new sections.
+export function resolveLayout(saved, surface) {
+  const base = DEFAULT_LAYOUT[surface] || DEFAULT_LAYOUT.popup;
+  const known = new Set(SECTIONS.map((s) => s.id));
+  const out = (saved || []).filter((x) => known.has(x.id));
+  for (const d of base) if (!out.some((x) => x.id === d.id)) out.push({ ...d });
+  return out;
+}
+
+// Editor for one surface's layout: toggle + reorder (buttons and drag). Calls onChange(newList).
+export function renderLayoutEditor(ol, list, onChange) {
+  ol.textContent = '';
+  ol.classList.add('layout');
+  list.forEach((entry, i) => {
+    const meta = SECTIONS.find((x) => x.id === entry.id);
+    const box = el('input', { type: 'checkbox', 'aria-label': `Show ${meta.label}` });
+    box.checked = entry.on;
+    const up = el('button', { type: 'button', class: 'up', title: 'Move up' }, '↑');
+    const down = el('button', { type: 'button', class: 'down', title: 'Move down' }, '↓');
+    up.disabled = i === 0; down.disabled = i === list.length - 1;
+    const li = el('li', { class: entry.on ? '' : 'off', draggable: 'true', 'data-id': entry.id },
+      el('span', { class: 'grip' }, '⋮⋮'), el('span', { class: 'txt' }, el('strong', {}, meta.label), el('small', {}, meta.hint)),
+      up, down, box);
+    const copy = () => list.map((x) => ({ ...x }));
+    box.onchange = () => { const l = copy(); l[i].on = box.checked; onChange(l); };
+    const move = (d) => { const l = copy(); [l[i], l[i + d]] = [l[i + d], l[i]]; onChange(l); };
+    up.onclick = () => move(-1); down.onclick = () => move(1);
+    li.ondragstart = (e) => { li.classList.add('dragging'); e.dataTransfer.setData('text/plain', entry.id); };
+    li.ondragend = () => li.classList.remove('dragging');
+    li.ondragover = (e) => e.preventDefault();
+    li.ondrop = (e) => {
+      e.preventDefault();
+      const l = copy(); const from = l.findIndex((x) => x.id === e.dataTransfer.getData('text/plain'));
+      if (from < 0 || from === i) return;
+      const [m] = l.splice(from, 1); l.splice(i, 0, m); onChange(l);
+    };
+    ol.append(li);
+  });
+}
+
+export function render(root, { snapshot, status, changes = [], settings, lastSeenAt = 0 }, { compact = false, actions = null, surface = 'popup' } = {}) {
   const now = Date.now();
   root.textContent = '';
   if (!snapshot && status?.state !== 'signed_out') {
@@ -67,52 +121,67 @@ export function render(root, { snapshot, status, changes = [], settings, lastSee
   }
   if (!snapshot) return;
   const { missing, upcoming } = classify(snapshot.deadlines, now, settings.windowDays, settings);
-
   const sec = (title, count, body, cls = '') => el('section', { class: cls }, el('h3', {}, el('span', {}, title), count ? el('span', { class: 'count' }, count) : null), body);
+  const dueLimit = compact ? 6 : 50;
 
-  if (missing.length)
-    root.append(sec('Missing', missing.length, el('ul', {}, missing.map((d) => item(d, now, actions))), 'missing'));
-  root.append(sec(`Due in the next ${settings.windowDays} days`, upcoming.length,
-    upcoming.length ? el('ul', {}, upcoming.slice(0, compact ? 6 : 50).map((d) => item(d, now, actions)), upcoming.length > (compact ? 6 : 50) ? el('li', { class: 'more' }, `+${upcoming.length - (compact ? 6 : 50)} more in the popup`) : null)
-                    : el('p', { class: 'empty' }, 'Nothing with a Learning Mall due date. Check module handbooks for others.')));
+  const build = {
+    missing: () => missing.length
+      ? sec('Missing', missing.length, el('ul', {}, missing.map((d) => item(d, now, actions))), 'missing') : null,
 
-  const ch = visibleChanges(changes, settings, lastSeenAt).slice(0, compact ? 5 : 30);
-  if (ch.length) root.append(sec('What changed', ch.filter((c) => c.unseen).length || null,
-    ch.length ? el('ul', {}, ch.map((c) => el('li', { class: `change ${c.unseen ? 'unseen' : ''}` },
-      el('span', { class: 'kind' }, KIND_LABEL[c.kind] || c.kind),
-      c.url ? el('a', { href: c.url, class: 'name' }, decode(c.title)) : el('span', { class: 'name' }, decode(c.title)),
-      el('div', { class: 'meta' }, c.course || ''))))
-              : null));
+    due: () => sec(`Due in the next ${settings.windowDays} days`, upcoming.length,
+      upcoming.length ? el('ul', {}, upcoming.slice(0, dueLimit).map((d) => item(d, now, actions)),
+                           upcoming.length > dueLimit ? el('li', { class: 'more' }, `+${upcoming.length - dueLimit} more in the popup`) : null)
+                      : el('p', { class: 'empty' }, 'Nothing with a Learning Mall due date. Check module handbooks for others.')),
 
-  // Catch up: released material you haven't opened yet, per module (Done marks + optional study log).
-  const UTILITY = /appointment|office hours|template|announcement|forum|feedback form|survey/i;
-  const eng = (snapshot.engagement || []).map((m) => ({ ...m, unopened: m.unopened.filter((u) => !UTILITY.test(u.name)) }))
-    .filter((m) => m.unopened.length && !settings.hiddenCourses.includes(m.courseId));
-  if (eng.length) {
-    const total = eng.reduce((a, m) => a + m.unopened.length, 0);
-    const word = snapshot.studyLog?.visitsMatched ? 'not opened' : 'not done';
-    root.append(sec('Catch up', total, el('ul', { class: 'catchup' }, eng.slice(0, compact ? 3 : 10).map((m) =>
-      el('li', {},
-        compact ? el('div', { class: 'row' }, el('span', { class: 'code' }, m.code), el('span', { class: 'meta' }, ` ${m.unopened.length} ${word}`))
-        : el('details', {},
-            el('summary', {}, el('span', { class: 'code' }, m.code),
-              el('span', { class: 'meta' }, ` ${m.unopened.length} ${word}`,
-                m.lastVisit ? ` · last opened ${ago(m.lastVisit, now)}` : '')),
-            el('ul', { class: 'sub' }, m.unopened.slice(0, 8).map((u) =>
-              el('li', {}, el('a', { href: u.url || '#', class: 'name', title: decode(u.name) }, decode(u.name)))),
-              m.unopened.length > 8 ? el('li', { class: 'more' }, el('a', { href: `https://core.xjtlu.edu.cn/course/view.php?id=${m.courseId}` }, `+${m.unopened.length - 8} more on the course page`)) : null)))))));
-    if (!snapshot.studyLog?.visitsMatched)
-      root.lastChild.append(el('p', { class: 'hint' }, 'From Learning Mall\'s own Done marks. Turn on the study log in Settings to also count what you\'ve opened.'));
+    changes: () => {
+      const ch = visibleChanges(changes, settings, lastSeenAt).slice(0, compact ? 5 : 30);
+      return ch.length ? sec('What changed', ch.filter((c) => c.unseen).length || null,
+        el('ul', {}, ch.map((c) => el('li', { class: `change ${c.unseen ? 'unseen' : ''}` },
+          el('span', { class: 'kind' }, KIND_LABEL[c.kind] || c.kind),
+          c.url ? el('a', { href: c.url, class: 'name' }, decode(c.title)) : el('span', { class: 'name' }, decode(c.title)),
+          el('div', { class: 'meta' }, c.course || ''))))) : null;
+    },
+
+    // Released material you haven't done or opened, per module (Done marks + optional study log).
+    catchup: () => {
+      const UTILITY = /appointment|office hours|template|announcement|forum|feedback form|survey/i;
+      const eng = (snapshot.engagement || []).map((m) => ({ ...m, unopened: m.unopened.filter((u) => !UTILITY.test(u.name)) }))
+        .filter((m) => m.unopened.length && !settings.hiddenCourses.includes(m.courseId));
+      if (!eng.length) return null;
+      const total = eng.reduce((a, m) => a + m.unopened.length, 0);
+      const word = snapshot.studyLog?.visitsMatched ? 'not opened' : 'not done';
+      const s = sec('Catch up', total, el('ul', { class: 'catchup' }, eng.slice(0, compact ? 3 : 10).map((m) =>
+        el('li', {},
+          compact ? el('div', { class: 'row' }, el('span', { class: 'code' }, m.code), el('span', { class: 'meta' }, ` ${m.unopened.length} ${word}`))
+          : el('details', {},
+              el('summary', {}, el('span', { class: 'code' }, m.code),
+                el('span', { class: 'meta' }, ` ${m.unopened.length} ${word}`, m.lastVisit ? ` · last opened ${ago(m.lastVisit, now)}` : '')),
+              el('ul', { class: 'sub' }, m.unopened.slice(0, 8).map((u) =>
+                el('li', {}, el('a', { href: u.url || '#', class: 'name', title: decode(u.name) }, decode(u.name)))),
+                m.unopened.length > 8 ? el('li', { class: 'more' }, el('a', { href: `https://core.xjtlu.edu.cn/course/view.php?id=${m.courseId}` }, `+${m.unopened.length - 8} more on the course page`)) : null))))));
+      if (!snapshot.studyLog?.visitsMatched && !compact)
+        s.append(el('p', { class: 'hint' }, "From Learning Mall's own Done marks. Turn on the study log in Settings to also count what you've opened."));
+      return s;
+    },
+
+    completion: () => {
+      const mods = (snapshot.courses || []).filter((c) => c.code && !settings.hiddenCourses.includes(c.id))
+        .sort((a, b) => (a.progress ?? 0) - (b.progress ?? 0));
+      return mods.length ? sec('Course completion', null, el('ul', { class: 'progress' }, mods.map((c) =>
+        el('li', {}, el('a', { href: c.url, class: 'code' }, c.code),
+          el('div', { class: 'bar' }, el('div', { class: 'fill', style: `width:${Math.max(0, Math.min(100, c.progress || 0))}%` })),
+          el('span', { class: 'pct' }, c.progress == null ? '–' : `${Math.round(c.progress)}%`))))) : null;
+    },
+  };
+
+  const layout = resolveLayout(settings.layout?.[surface], surface);
+  let shown = 0;
+  for (const { id, on } of layout) {
+    if (!on || !build[id]) continue;
+    const node = build[id]();
+    if (node) { node.dataset.section = id; root.append(node); shown++; }
   }
-
-  if (!compact) {
-    const mods = (snapshot.courses || []).filter((c) => c.code && !settings.hiddenCourses.includes(c.id));
-    mods.sort((a, b) => (a.progress ?? 0) - (b.progress ?? 0));
-    if (mods.length) root.append(sec('Course completion', null, el('ul', { class: 'progress' }, mods.map((c) =>
-      el('li', {}, el('a', { href: c.url, class: 'code' }, c.code),
-        el('div', { class: 'bar' }, el('div', { class: 'fill', style: `width:${Math.max(0, Math.min(100, c.progress || 0))}%` })),
-        el('span', { class: 'pct' }, c.progress == null ? '–' : `${Math.round(c.progress)}%`))))));
-  }
+  if (!shown) root.append(el('p', { class: 'empty' }, 'All sections are turned off or empty. Change what shows in Settings.'));
   const mins = Math.round((now - snapshot.at) / 60000);
   root.append(el('p', { class: 'foot' }, mins < 1 ? 'Updated just now' : mins < 60 ? `Updated ${mins} min ago` : `Updated ${new Date(snapshot.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`));
 }

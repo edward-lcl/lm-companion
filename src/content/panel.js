@@ -24,7 +24,7 @@
 
   const draw = async () => {
     const data = await chrome.storage.local.get(['snapshot', 'status', 'changes', 'lastSeenAt']);
-    render(body, { ...data, settings: await getSettings(storage) }, { compact: true });
+    render(body, { ...data, settings: await getSettings(storage) }, { compact: true, surface: 'panel' });
   };
   await draw();
   chrome.storage.onChanged.addListener(draw);
