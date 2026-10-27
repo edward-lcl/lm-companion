@@ -4,6 +4,7 @@ import { sync, getSettings, visibleChanges, classify } from './lib/sync.js';
 import { setLang, t } from './lib/i18n.js';
 import { plan, nextAt, digest } from './lib/reminders.js';
 import { pressure, freshness } from './lib/time.js';
+import { HOST, buildPayload, mergeMarks } from './lib/bar.js';
 
 const storage = {
   get: (k) => chrome.storage.local.get(k),
@@ -46,12 +47,45 @@ async function history() {
 }
 
 async function runSync() {
+  // Firefox/Zen: without host access, requests carry no login and every page looks signed out.
+  if (!(await chrome.permissions.contains({ origins: ['https://core.xjtlu.edu.cn/*'] }))) return { state: 'needs_access' };
   running ||= sync({ storage, parse, history }).finally(() => { running = null; });
   const res = await running;
   await updateBadge();
   await schedule();
+  await pushToBar();
   return res;
 }
+
+// ---- LM Bar (Mac menu bar app). Optional: needs the "nativeMessaging" permission and the app
+// installed. Pushes the latest data after every sync and pulls back ticks made in the menu bar.
+async function pushToBar() {
+  if (!chrome.runtime.sendNativeMessage) return;
+  if (!(await chrome.permissions.contains({ permissions: ['nativeMessaging'] }))) return;
+  const settings = await getSettings(storage);
+  const { snapshot, status, changes = [], lastSeenAt = 0 } = await chrome.storage.local.get(['snapshot', 'status', 'changes', 'lastSeenAt']);
+  if (!snapshot) return;
+  const lang = settings.lang === 'zh' || settings.lang === 'en' ? settings.lang : (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+  try {
+    const r = await chrome.runtime.sendNativeMessage(HOST, { cmd: 'push', payload: buildPayload({ snapshot, status, settings, changes, lastSeenAt, lang }) });
+    await chrome.storage.local.set({ barStatus: { ok: !!r?.ok, at: Date.now(), error: r?.error || null } });
+    if (r?.marks) {
+      const { changed, settings: merged } = mergeMarks(settings, r.marks);
+      if (changed) { await chrome.storage.local.set({ settings: merged }); await updateBadge(); }
+    }
+  } catch (e) {
+    await chrome.storage.local.set({ barStatus: { ok: false, at: Date.now(), error: String(e.message || e).slice(0, 120) } });
+  }
+}
+
+// Refresh as soon as you sign in: Learning Mall's dashboard loads after a successful login, so a
+// completed navigation to /my/ while we think we're signed out (or stale) triggers a sync.
+chrome.webNavigation?.onCompleted.addListener(async (d) => {
+  if (d.frameId !== 0) return;
+  const { status, snapshot } = await chrome.storage.local.get(['status', 'snapshot']);
+  const stale = !snapshot || Date.now() - snapshot.at > 10 * 60000;
+  if (status?.state === 'signed_out' || stale) runSync().catch(() => {});
+}, { url: [{ hostEquals: 'core.xjtlu.edu.cn', pathPrefix: '/my' }] });
 
 // Toolbar icon as a meter (after CodexBar): a rounded tile whose fill rises as the nearest deadline
 // approaches over 7 days. Colour: purple calm, amber within 3 days, red within 24h or overdue.
@@ -173,8 +207,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.target === 'offscreen') return;  // handled there
   if (msg.cmd === 'refresh') { runSync().then(reply, (e) => reply({ state: 'error', detail: String(e) })); return true; }
   if (msg.cmd === 'badge') { updateBadge().then(() => reply({})); return true; }
+  if (msg.cmd === 'bar_push') { pushToBar().then(() => chrome.storage.local.get('barStatus')).then((x) => reply(x.barStatus || {})); return true; }
   if (msg.cmd === 'settings_changed') {
-    getSettings(storage).then((s) => { chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes }); return updateBadge(); }).then(schedule).then(() => reply({}));
+    getSettings(storage).then((s) => { chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes }); return updateBadge(); }).then(schedule).then(pushToBar).then(() => reply({}));
     return true;
   }
 });

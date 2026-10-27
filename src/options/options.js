@@ -44,6 +44,21 @@ for (const b of document.querySelectorAll('[data-before]')) {
 }
 $('#testNotify').onclick = () => chrome.notifications?.create('test', { type: 'basic', iconUrl: chrome.runtime.getURL('icons/128.png'), title: t('n_test'), message: t('n_test_body') });
 
+// LM Bar (Mac menu bar app): optional nativeMessaging permission, then one push to confirm.
+const barStatusText = (b) => !b ? t('o_bar_hint') : b.ok ? t('o_bar_ok') : t('o_bar_missing');
+$('#barOn').checked = await chrome.permissions.contains({ permissions: ['nativeMessaging'] });
+if ($('#barOn').checked) $('#barHint').textContent = barStatusText((await chrome.storage.local.get('barStatus')).barStatus);
+$('#barOn').onchange = async (e) => {
+  if (e.target.checked) {
+    const ok = await chrome.permissions.request({ permissions: ['nativeMessaging'] });
+    e.target.checked = ok;
+    if (ok) $('#barHint').textContent = barStatusText(await chrome.runtime.sendMessage({ cmd: 'bar_push' }));
+  } else {
+    await chrome.permissions.remove({ permissions: ['nativeMessaging'] });
+    $('#barHint').textContent = t('o_bar_hint');
+  }
+};
+
 $('#showPanel').checked = s.showPanel;
 $('#showPanel').onchange = (e) => { s.showPanel = e.target.checked; save(); };
 

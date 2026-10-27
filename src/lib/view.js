@@ -124,9 +124,16 @@ function downloadICS(deadlines) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-export function render(root, { snapshot, status, changes = [], settings, lastSeenAt = 0 }, { compact = false, actions = null, surface = 'popup' } = {}) {
+export function render(root, { snapshot, status, changes = [], settings, lastSeenAt = 0, needsAccess = false }, { compact = false, actions = null, surface = 'popup' } = {}) {
   const now = Date.now();
   root.textContent = '';
+  // Firefox/Zen: host access is opt-in. Without it requests go out without your Learning Mall login.
+  if (needsAccess) {
+    const btn = el('button', { type: 'button', class: 'grant' }, t('grant_btn'));
+    btn.onclick = () => actions?.grant?.();
+    root.append(el('div', { class: 'banner warn grantbox' }, el('div', {}, t('grant_msg')), btn));
+    return;
+  }
   if (!snapshot && status?.state !== 'signed_out') {
     root.append(el('p', { class: 'empty' }, t('loading')));
     return;

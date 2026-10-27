@@ -99,6 +99,8 @@ body.popup {
 .lmc .banner.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad); }
 .lmc .banner.warn { background: color-mix(in srgb, var(--warn) 13%, transparent); color: var(--warn); }
 .lmc .banner a { text-decoration: underline; }
+.lmc .grantbox { display: flex; flex-direction: column; gap: 10px; }
+.lmc button.grant { align-self: flex-start; font: inherit; font-weight: 600; border: 0; background: var(--accent); color: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
 .lmc .banner.stale { background: var(--hair); color: var(--muted); font-size: 12px; }
 .lmc.is-stale section.lmc-card { filter: saturate(.55); }
 .lmc.is-stale .due { opacity: .8; }

@@ -241,3 +241,28 @@ test('time: countdown, freshness, pressure', async () => {
   const calm = pressure([{ due: now + 6 * 24 * H }, { due: now + 9 * 24 * H }], now);
   assert.equal(calm.level, 'calm'); assert.ok(calm.fill > 0.1 && calm.fill < 0.2);
 });
+
+test('bar: payload shape and mark merge (last write wins)', async () => {
+  const { buildPayload, mergeMarks } = await import('../src/lib/bar.js');
+  const now = Date.UTC(2026, 9, 27, 12);
+  const snapshot = { at: now - 60000, deadlines: [
+    { id: 'a', name: 'Late', code: 'EAP048', due: now - 86400000, overdue: true, actionable: false },
+    { id: 'b', name: 'Mock Exam', code: 'MTH030', type: 'quiz', due: now + 3600000, overdue: false, action: 'Attempt quiz', actionable: true },
+    { id: 'c', name: 'Scholarship', code: null, due: now + 3600000, overdue: false } ],
+    engagement: [{ code: 'MTH030', courseId: '9', unopened: [1, 2, 3] }], courses: [{ code: 'MTH030', progress: 25 }] };
+  const settings = { ...DEFAULT_SETTINGS, doneItems: ['b'], doneAt: { b: now - 1000 } };
+  const p = buildPayload({ snapshot, status: { state: 'ok' }, settings, lang: 'zh', now });
+  assert.deepEqual(p.items.map((i) => i.id), ['a', 'b']);          // only-my-modules drops the scholarship
+  assert.equal(p.items[0].closedNote, true);
+  assert.equal(p.items[1].kind, 'exam');
+  assert.deepEqual(p.doneAt, { b: now - 1000 });
+  assert.deepEqual(p.catchup, [{ code: 'MTH030', n: 3, url: 'https://core.xjtlu.edu.cn/course/view.php?id=9' }]);
+  assert.equal(p.lang, 'zh');
+  // menu bar unticked b after the browser ticked it -> undone; older mark is ignored
+  let r = mergeMarks(settings, { b: { done: false, at: now } });
+  assert.equal(r.changed, true); assert.deepEqual(r.settings.doneItems, []);
+  r = mergeMarks(settings, { b: { done: false, at: now - 5000 } });
+  assert.equal(r.changed, false);
+  r = mergeMarks(settings, { a: { done: true, at: now } });
+  assert.deepEqual(r.settings.doneItems.sort(), ['a', 'b']); assert.equal(r.settings.doneAt.a, now);
+});

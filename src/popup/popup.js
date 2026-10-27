@@ -5,7 +5,15 @@ import { setLang, t, applyI18n } from '../lib/i18n.js';
 const storage = { get: (k) => chrome.storage.local.get(k), set: (o) => chrome.storage.local.set(o) };
 const root = document.getElementById('root');
 
+const HOSTS = { origins: ['https://core.xjtlu.edu.cn/*'] };
+const hasAccess = () => chrome.permissions.contains(HOSTS);
 const actions = {
+  // Must run straight from the click (Firefox requires a user gesture for permission prompts).
+  grant() {
+    chrome.permissions.request(HOSTS).then(async (ok) => {
+      if (ok) { await chrome.runtime.sendMessage({ cmd: 'refresh' }); draw(); }
+    });
+  },
   async tick(id, on) {
     const s = await getSettings(storage);
     const doneAt = { ...(s.doneAt || {}) };
@@ -29,7 +37,7 @@ async function draw() {
   setLang(settings.lang);
   applyI18n();
   if (editing) return drawEditor(settings);
-  render(root, { ...data, settings }, { actions, surface: 'popup' });
+  render(root, { ...data, settings, needsAccess: !(await hasAccess()) }, { actions, surface: 'popup' });
 }
 function drawEditor(settings) {
   root.textContent = '';

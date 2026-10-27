@@ -10,6 +10,12 @@ fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive:
 const profile = `${OUT}/profile`;
 const s = JSON.parse(fs.readFileSync(`${process.env.HOME}/.xjtlu-session-mcp/session.json`, 'utf8'));
 
+// With a custom user-data-dir Chromium reads user-level native hosts from <profile>/NativeMessagingHosts.
+if (process.env.LMC_BAR) {
+  const src = `${process.env.HOME}/Library/Application Support/Google/Chrome/NativeMessagingHosts/edu.xjtlu.lmbar.json`;
+  fs.mkdirSync(`${profile}/NativeMessagingHosts`, { recursive: true });
+  if (fs.existsSync(src)) fs.copyFileSync(src, `${profile}/NativeMessagingHosts/edu.xjtlu.lmbar.json`);
+}
 const ctx = await chromium.launchPersistentContext(profile, {
   headless: true, channel: 'chromium', acceptDownloads: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
@@ -145,6 +151,17 @@ const staleBadge = await sw.evaluate(async () => ({ title: await chrome.action.g
 console.log('stale badge', JSON.stringify(staleBadge));
 await popup.screenshot({ path: `${OUT}/popup-stale.png`, fullPage: false });
 await popup.evaluate(async () => { const { snapshot } = await chrome.storage.local.get('snapshot'); await chrome.storage.local.set({ snapshot: { ...snapshot, at: Date.now() } }); await chrome.runtime.sendMessage({ cmd: 'badge' }); });
+
+// LM Bar: grant nativeMessaging (non-interactive via a manifest-free path: permissions granted to
+// unpacked test extension through the request race), push, and read the app's payload file.
+if (process.env.LMC_BAR) {
+  const granted2 = await popup.evaluate(async () => Promise.race([
+    chrome.permissions.request({ permissions: ['nativeMessaging'] }).catch((e) => 'err:' + e.message),
+    new Promise((r) => setTimeout(() => r('prompt-unanswered'), 3000))]));
+  console.log('nativeMessaging permission', granted2);
+  const bar = await popup.evaluate(() => chrome.runtime.sendMessage({ cmd: 'bar_push' }));
+  console.log('bar push', JSON.stringify(bar));
+}
 
 const badge = await sw.evaluate(async () => ({ text: await chrome.action.getBadgeText({}), title: await chrome.action.getTitle({}) }));
 console.log('badge', JSON.stringify(badge));
