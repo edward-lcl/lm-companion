@@ -27,6 +27,10 @@ and no setup: install it, sign in to Learning Mall as usual, and it works.
 - **中文界面:** follows your browser language, or pick 简体中文 / English in Settings.
 - **Dashboard panel (optional):** the same view as a block on your Learning Mall Dashboard. Off by
   default; turn it on in Settings.
+- **Countdowns:** anything due within 24 hours shows time left (还剩 5 小时 11 分) instead of a date.
+- **Toolbar meter:** the icon fills up as your next deadline gets closer over the week: purple when
+  calm, amber within 3 days, red within 24 hours or overdue. It turns grey when you're signed out or
+  the data is out of date, so old numbers never look current. (Idea from CodexBar.)
 - **Honest failures:** if you're signed out or Learning Mall changes, it says so instead of showing an
   empty list.
 
@@ -54,7 +58,7 @@ npm run build            # dist/lm-companion-<version>.zip
 (gitignored), so the parsers are tested against real markup without publishing anyone's data.
 
 ## Status
-v0.5, October 2026. Works end to end in Chrome and Edge against the live site. Not yet in a browser
+v0.6, October 2026. Works end to end in Chrome and Edge against the live site. Not yet in a browser
 store. Built by an XJTLU student; not an official university tool.
 
 ## Credits

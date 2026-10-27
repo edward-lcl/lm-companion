@@ -3,13 +3,16 @@ import { classify, visibleChanges } from './sync.js';
 import { t, tAction, locale } from './i18n.js';
 import { eventKind, week as buildWeek, toICS } from './calendar.js';
 import { checklist } from './reminders.js';
+import { countdown, freshness } from './time.js';
 
 const fmtTime = (d) => d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit', hour12: !locale() });
 const fmtDue = (ms, now = Date.now()) => {
   const d = new Date(ms);
   const days = Math.floor((new Date(d).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86400000);
   const time = fmtTime(d);
-  if (days < 0) return t('overdue_days', { n: -days });
+  if (days < 0 || ms < now) return days < 0 ? t('overdue_days', { n: -days }) : t('overdue_hours', { n: Math.max(1, Math.round((now - ms) / 3600000)) });
+  const cd = countdown(ms, now);
+  if (cd) return `${cd.h < 1 ? t('cd_m', { m: cd.m }) : t('cd_hm', { h: cd.h, m: cd.m })} · ${time}`;
   if (days === 0) return `${t('today')} ${time}`;
   if (days === 1) return `${t('tomorrow')} ${time}`;
   const date = d.toLocaleDateString(locale(), { month: 'short', day: 'numeric' });
@@ -136,6 +139,10 @@ export function render(root, { snapshot, status, changes = [], settings, lastSee
       status.errors?.length ? status.errors.slice(0, 2).join('; ') : (status.detail || '')));
   }
   if (!snapshot) return;
+  const fresh = freshness(snapshot.at, settings.refreshMinutes, now);
+  if (status?.state !== 'signed_out' && (fresh === 'stale' || fresh === 'old'))
+    root.append(el('div', { class: 'banner stale' }, t('stale', { t: new Date(snapshot.at).toLocaleString(locale(), { weekday: 'short', hour: 'numeric', minute: '2-digit' }) })));
+  root.classList.toggle('is-stale', fresh !== 'fresh' || status?.state === 'signed_out');
   const { missing, upcoming } = classify(snapshot.deadlines, now, settings.windowDays, settings);
   const sec = (title, count, body, cls = '') => el('section', { class: `lmc-card ${cls}` }, el('h3', {}, el('span', {}, title), count ? el('span', { class: 'count' }, count) : null), body);
   const dueLimit = compact ? 6 : 50;

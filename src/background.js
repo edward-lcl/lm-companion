@@ -3,6 +3,7 @@
 import { sync, getSettings, visibleChanges, classify } from './lib/sync.js';
 import { setLang, t } from './lib/i18n.js';
 import { plan, nextAt, digest } from './lib/reminders.js';
+import { pressure, freshness } from './lib/time.js';
 
 const storage = {
   get: (k) => chrome.storage.local.get(k),
@@ -44,17 +45,59 @@ async function runSync() {
   return res;
 }
 
+// Toolbar icon as a meter (after CodexBar): a rounded tile whose fill rises as the nearest deadline
+// approaches over 7 days. Colour: purple calm, amber within 3 days, red within 24h or overdue.
+// Dimmed grey when signed out or the data is stale, so old numbers never look live.
+const LEVEL = { clear: '#8f7cff', calm: '#7a68f0', soon: '#e59a1a', today: '#e5484d', overdue: '#e5484d' };
+async function drawIcon({ fill, level }, dim) {
+  if (typeof OffscreenCanvas === 'undefined') return;
+  const imageData = {};
+  for (const size of [16, 32]) {
+    const c = new OffscreenCanvas(size, size); const g = c.getContext('2d');
+    const px = size / 16, pad = px, w = size - 2 * pad, r = size * 0.24;
+    const tile = () => { g.beginPath(); g.roundRect(pad, pad, w, w, r); };
+    tile(); g.fillStyle = dim ? '#e4e2ea' : '#ece8ff'; g.fill();
+    // Whole-pixel fill steps so 16px states stay distinct: calm >= 3px, today leaves >= 3px empty.
+    let h = 0;
+    if (fill > 0) {
+      const steps = Math.round(w / px);
+      let n = Math.round(fill * steps);
+      if (level === 'calm') n = Math.max(3, Math.min(n, steps - 6));
+      if (level === 'soon') n = Math.max(6, Math.min(n, steps - 4));
+      if (level === 'today') n = steps - 5;
+      if (level === 'overdue') n = steps;
+      h = n * px;
+      g.save(); tile(); g.clip();
+      g.fillStyle = dim ? '#8f8b9e' : (LEVEL[level] || LEVEL.calm); g.fillRect(pad, pad + w - h, w, h);
+      g.restore();
+    }
+    tile(); g.lineWidth = px * 1.2; g.strokeStyle = dim ? '#8e8a9c' : (LEVEL[level] || LEVEL.calm); g.stroke();
+    // Tick: white with a dark halo when it sits on colour, indigo on the pale tile.
+    const onFill = h > w * 0.62;
+    const tick = () => { g.beginPath(); g.moveTo(size * 0.29, size * 0.47); g.lineTo(size * 0.44, size * 0.62); g.lineTo(size * 0.72, size * 0.33); };
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    if (onFill) { g.strokeStyle = 'rgba(40,20,60,.35)'; g.lineWidth = px * 2.6; tick(); g.stroke(); }
+    g.strokeStyle = onFill ? '#ffffff' : (dim ? '#5f5b6e' : '#4a3db8'); g.lineWidth = px * 1.7; tick(); g.stroke();
+    imageData[size] = g.getImageData(0, 0, size, size);
+  }
+  await chrome.action.setIcon({ imageData });
+}
+
 async function updateBadge() {
   const { status, snapshot, changes = [], lastSeenAt = 0 } = await chrome.storage.local.get(['status', 'snapshot', 'changes', 'lastSeenAt']);
   const settings = await getSettings(storage);
   setLang(settings.lang);
   if (status?.state === 'signed_out') {
+    await drawIcon({ fill: 0, level: 'clear' }, true);
     chrome.action.setBadgeText({ text: '!' }); chrome.action.setBadgeBackgroundColor({ color: '#b3261e' });
     chrome.action.setTitle({ title: t('badge_out') }); return;
   }
   const missing = snapshot ? classify(snapshot.deadlines, Date.now(), settings.windowDays, settings).missing.length : 0;
   const unseen = visibleChanges(changes, settings, lastSeenAt).filter((c) => c.unseen).length;
   const n = missing + unseen;
+  const fresh = snapshot ? freshness(snapshot.at, settings.refreshMinutes) : 'none';
+  await drawIcon(snapshot ? pressure(classify(snapshot.deadlines, Date.now(), 30, settings).missing.concat(classify(snapshot.deadlines, Date.now(), 30, settings).upcoming)) : { fill: 0, level: 'clear' }, fresh !== 'fresh');
+  if (fresh === 'stale' || fresh === 'old') { chrome.action.setBadgeText({ text: n ? String(n) : '' }); chrome.action.setBadgeBackgroundColor({ color: '#8e8a9c' }); chrome.action.setTitle({ title: t('badge_stale') }); return; }
   chrome.action.setBadgeText({ text: n ? String(n) : '' });
   chrome.action.setBadgeBackgroundColor({ color: missing ? '#b3261e' : '#5b4bb7' });
   chrome.action.setTitle({ title: t('badge_title', { m: missing, n: unseen }) });

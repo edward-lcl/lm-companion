@@ -64,6 +64,9 @@
 .lmc .banner.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad); }
 .lmc .banner.warn { background: color-mix(in srgb, var(--warn) 13%, transparent); color: var(--warn); }
 .lmc .banner a { text-decoration: underline; }
+.lmc .banner.stale { background: var(--hair); color: var(--muted); font-size: 12px; }
+.lmc.is-stale section.lmc-card { filter: saturate(.55); }
+.lmc.is-stale .due { opacity: .8; }
 
 /* ---------- today checklist ---------- */
 .lmc .checklist li.check { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; }

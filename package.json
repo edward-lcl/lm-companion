@@ -1,6 +1,6 @@
 {
   "name": "lm-companion",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "What's due, what's missing and what changed on XJTLU Learning Mall.",

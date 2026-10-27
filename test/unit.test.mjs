@@ -223,3 +223,21 @@ test('reminders: checklist, plan, nextAt', async () => {
   assert.deepEqual(p.map((r) => r.key), ['tonight@2', 'tmrPm@24', 'tmrPm@2']);
   assert.ok(p.every((r) => r.when > now));
 });
+
+test('time: countdown, freshness, pressure', async () => {
+  const { countdown, freshness, pressure } = await import('../src/lib/time.js');
+  const H = 3600000, now = Date.UTC(2026, 9, 27, 12);
+  assert.deepEqual(countdown(now + 7 * H + 12 * 60000, now), { h: 7, m: 12 });
+  assert.equal(countdown(now + 30 * H, now), null);
+  assert.equal(countdown(now - 1, now), null);
+  assert.equal(freshness(now - 30 * 60000, 60, now), 'fresh');
+  assert.equal(freshness(now - 3 * H, 60, now), 'stale');
+  assert.equal(freshness(now - 25 * H, 60, now), 'old');
+  assert.equal(freshness(0, 60, now), 'none');
+  assert.equal(pressure([], now).level, 'clear');
+  assert.equal(pressure([{ due: now - H, overdue: true }], now).level, 'overdue');
+  assert.equal(pressure([{ due: now + 10 * H }], now).level, 'today');
+  assert.equal(pressure([{ due: now + 48 * H }], now).level, 'soon');
+  const calm = pressure([{ due: now + 6 * 24 * H }, { due: now + 9 * 24 * H }], now);
+  assert.equal(calm.level, 'calm'); assert.ok(calm.fill > 0.1 && calm.fill < 0.2);
+});

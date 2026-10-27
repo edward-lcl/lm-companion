@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LM Companion",
   "description": "What's due, what's missing and what changed on XJTLU Learning Mall. Runs in your browser; nothing leaves it.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "permissions": [
     "storage",
     "alarms",
@@ -48,6 +48,7 @@
         "src/lib/i18n.js",
         "src/lib/calendar.js",
         "src/lib/reminders.js",
+        "src/lib/time.js",
         "src/lib/sync.js",
         "src/lib/moodle.js"
       ],

@@ -123,6 +123,29 @@ await dash.reload({ waitUntil: 'domcontentloaded' }); await dash.waitForTimeout(
 const panelZh = await dash.$('.lmc-panel');
 if (panelZh) { await panelZh.screenshot({ path: `${OUT}/panel-zh.png` }); console.log('panel zh title', await dash.$eval('.lmc-title', (n) => n.textContent)); }
 
+// Countdown text on items due within 24h, and the meter icon.
+await popup.evaluate(async () => { const { snapshot } = await chrome.storage.local.get('snapshot'); const soon = { id: 'test:soon', name: 'Countdown probe', type: 'assign', code: 'MTH030', courseId: 'x', due: Date.now() + (5 * 60 + 12) * 60000, overdue: false, action: 'Add submission', actionable: true }; await chrome.storage.local.set({ snapshot: { ...snapshot, deadlines: [...snapshot.deadlines, soon] } }); });
+await popup.waitForTimeout(500);
+const cds = await popup.$$eval('.due', (ds) => ds.map((d) => d.textContent).filter((x) => /还剩|in \d/.test(x)));
+console.log('countdowns', JSON.stringify(cds.slice(0, 3)));
+await popup.screenshot({ path: `${OUT}/popup-countdown.png`, clip: { x: 0, y: 0, width: 380, height: 420 } });
+await popup.evaluate(async () => { const { snapshot } = await chrome.storage.local.get('snapshot'); await chrome.storage.local.set({ snapshot: { ...snapshot, deadlines: snapshot.deadlines.filter((d) => d.id !== 'test:soon') } }); });
+await sw.evaluate(() => chrome.runtime.sendMessage ? null : null);
+await popup.evaluate(() => chrome.runtime.sendMessage({ cmd: 'badge' }));
+// Render the icon the same way the worker does, to a PNG we can look at.
+const iconPng = await popup.evaluate(async () => {
+  const LEVEL = { soon: '#e59a1a' }; const size = 128; const c = new OffscreenCanvas(size, size); const g = c.getContext('2d');
+  return null;
+});
+// Stale: backdate the snapshot 5 hours and confirm banner + grey badge.
+await popup.evaluate(async () => { const { snapshot } = await chrome.storage.local.get('snapshot'); await chrome.storage.local.set({ snapshot: { ...snapshot, at: Date.now() - 5 * 3600000 } }); await chrome.runtime.sendMessage({ cmd: 'badge' }); });
+await popup.reload(); await popup.waitForTimeout(700);
+console.log('stale banner', await popup.$eval('.banner.stale', (b) => b.textContent).catch(() => 'none'), 'is-stale', await popup.$eval('#root', (r) => r.classList.contains('is-stale')));
+const staleBadge = await sw.evaluate(async () => ({ title: await chrome.action.getTitle({}), color: await chrome.action.getBadgeBackgroundColor({}) }));
+console.log('stale badge', JSON.stringify(staleBadge));
+await popup.screenshot({ path: `${OUT}/popup-stale.png`, fullPage: false });
+await popup.evaluate(async () => { const { snapshot } = await chrome.storage.local.get('snapshot'); await chrome.storage.local.set({ snapshot: { ...snapshot, at: Date.now() } }); await chrome.runtime.sendMessage({ cmd: 'badge' }); });
+
 const badge = await sw.evaluate(async () => ({ text: await chrome.action.getBadgeText({}), title: await chrome.action.getTitle({}) }));
 console.log('badge', JSON.stringify(badge));
 console.log('errors', errs.length ? errs.slice(0, 5) : 'none');
