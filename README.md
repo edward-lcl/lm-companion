@@ -54,8 +54,11 @@ npm run build            # dist/lm-companion-<version>.zip
 (gitignored), so the parsers are tested against real markup without publishing anyone's data.
 
 ## Status
-v0.1, built 2026-10-27. Works end to end in Chromium against the live site. Not yet in a browser store.
-Optional add-on in progress: staying signed in automatically through the OS keychain
-(see the `xjtlu-login-helper` prototype).
+v0.5, October 2026. Works end to end in Chrome and Edge against the live site. Not yet in a browser
+store. Built by an XJTLU student; not an official university tool.
+
+## Credits
+Design informed by [xjtlu-core-mcp](https://github.com/shanyuzhang/xjtlu-core-mcp) (MIT), the
+Learning Mall MCP server by Shanyu Zhang, and by open-source Canvas and Moodle extensions.
 
 MIT licence.
