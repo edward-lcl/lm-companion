@@ -63,6 +63,11 @@ extension.
 The extension needs no API keys, passwords or accounts. Don't ask the user for their Learning Mall
 password.
 
+This repo is self-contained: nothing else needs to be installed for the extension to work. If the
+user also wants their agent to read Learning Mall directly (ask about deadlines or grades in chat),
+that is a separate, optional tool: [xjtlu-core-mcp](https://github.com/shanyuzhang/xjtlu-core-mcp),
+an MCP server with its own setup. Only install it if they ask for that.
+
 ## Develop
 ```
 npm install
