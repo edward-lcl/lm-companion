@@ -1,7 +1,11 @@
-# LM Companion · LM 学习助手
+# XJTLU Learning Mall Companion · 西浦 Learning Mall 学习助手
 
-What's due, what's missing and what changed on XJTLU Learning Mall, in one click. No AI, no account
-and no setup: install it, sign in to Learning Mall as usual, and it works.
+A free, open-source browser extension for **XJTLU (Xi'an Jiaotong-Liverpool University, 西交利物浦大学)
+students** that shows your **Learning Mall** (core.xjtlu.edu.cn, Moodle) deadlines, a daily checklist
+and reminders, in one click. Works in Chrome and Edge. No AI, no account and no setup: install it,
+sign in to Learning Mall as usual, and it works. 中文 / English.
+
+为西浦学生做的免费开源浏览器插件：一键查看 Learning Mall 作业截止日期、今日清单和提醒，支持中文界面。
 
 ## What it does
 - **Today (今日清单):** a daily checklist of what's overdue, due today and due tomorrow morning.
@@ -52,8 +56,8 @@ and no setup: install it, sign in to Learning Mall as usual, and it works.
 Agents can do everything except the final click, because Chrome only lets a person load an unpacked
 extension.
 1. Download the latest release zip from
-   `https://github.com/edward-lcl/lm-companion/releases/latest` and unzip it to a stable folder the
-   user won't delete (for example `~/Applications/lm-companion`). Don't use a temp folder: Chrome
+   `https://github.com/edward-lcl/xjtlu-learning-mall-companion/releases/latest` and unzip it to a stable folder the
+   user won't delete (for example `~/Applications/xjtlu-learning-mall-companion`). Don't use a temp folder: Chrome
    loads the extension from that folder every time.
 2. Open `chrome://extensions` for the user and tell them to: turn on **Developer mode** (top right),
    click **Load unpacked**, and pick that folder.

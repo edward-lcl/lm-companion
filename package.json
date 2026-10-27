@@ -1,9 +1,9 @@
 {
-  "name": "lm-companion",
-  "version": "0.6.0",
+  "name": "xjtlu-learning-mall-companion",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
-  "description": "What's due, what's missing and what changed on XJTLU Learning Mall.",
+  "description": "XJTLU Learning Mall (Moodle) deadlines, daily checklist and reminders browser extension.",
   "license": "MIT",
   "scripts": {
     "test": "node --test test/*.test.mjs",

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LM Companion",
-  "description": "What's due, what's missing and what changed on XJTLU Learning Mall. Runs in your browser; nothing leaves it.",
-  "version": "0.6.0",
+  "name": "XJTLU Learning Mall Companion",
+  "description": "XJTLU Learning Mall (Moodle) deadlines, daily checklist and reminders. 西浦 Learning Mall 截止日期与提醒。",
+  "version": "0.6.1",
   "permissions": [
     "storage",
     "alarms",
@@ -17,7 +17,7 @@
   },
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "LM Companion"
+    "default_title": "XJTLU Learning Mall Companion"
   },
   "options_page": "src/options/options.html",
   "content_scripts": [
