@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = {
   doneItems: [],                    // per-item "I've handled this" (stays visible elsewhere, leaves Missing/Due)
   studyLog: false,                  // optional: use browser history of Learning Mall pages (needs the history permission)
   refreshMinutes: 60,
+  lang: 'auto',                     // 'auto' (follow browser) | 'en' | 'zh'
   layout: null,                     // per surface { popup: [{id,on}], panel: [...] }; null = defaults (see view.js)
 };
 

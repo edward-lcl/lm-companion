@@ -1,6 +1,7 @@
 // Background service worker: periodic sync + badge. DOMParser isn't available in service
 // workers, so HTML parsing happens in an offscreen document.
 import { sync, getSettings, visibleChanges, classify } from './lib/sync.js';
+import { setLang, t } from './lib/i18n.js';
 
 const storage = {
   get: (k) => chrome.storage.local.get(k),
@@ -44,16 +45,17 @@ async function runSync() {
 async function updateBadge() {
   const { status, snapshot, changes = [], lastSeenAt = 0 } = await chrome.storage.local.get(['status', 'snapshot', 'changes', 'lastSeenAt']);
   const settings = await getSettings(storage);
+  setLang(settings.lang);
   if (status?.state === 'signed_out') {
     chrome.action.setBadgeText({ text: '!' }); chrome.action.setBadgeBackgroundColor({ color: '#b3261e' });
-    chrome.action.setTitle({ title: 'LM Companion: signed out of Learning Mall' }); return;
+    chrome.action.setTitle({ title: t('badge_out') }); return;
   }
   const missing = snapshot ? classify(snapshot.deadlines, Date.now(), settings.windowDays, settings).missing.length : 0;
   const unseen = visibleChanges(changes, settings, lastSeenAt).filter((c) => c.unseen).length;
   const n = missing + unseen;
   chrome.action.setBadgeText({ text: n ? String(n) : '' });
   chrome.action.setBadgeBackgroundColor({ color: missing ? '#b3261e' : '#5b4bb7' });
-  chrome.action.setTitle({ title: `LM Companion: ${missing} missing, ${unseen} new` });
+  chrome.action.setTitle({ title: t('badge_title', { m: missing, n: unseen }) });
 }
 
 chrome.runtime.onInstalled.addListener(async () => {

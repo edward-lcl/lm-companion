@@ -1,5 +1,6 @@
 import { getSettings } from '../lib/sync.js';
 import { resolveLayout, renderLayoutEditor } from '../lib/view.js';
+import { setLang, t, applyI18n } from '../lib/i18n.js';
 
 const storage = { get: (k) => chrome.storage.local.get(k), set: (o) => chrome.storage.local.set(o) };
 const $ = (s) => document.querySelector(s);
@@ -11,24 +12,36 @@ const save = async () => {
   $('#saved').style.opacity = 1; setTimeout(() => ($('#saved').style.opacity = 0), 900);
 };
 
+function translate() {
+  setLang(s.lang);
+  applyI18n();
+  document.title = t('app');
+  hiddenLabel();
+  drawLayout();
+}
+
+$('#lang').value = s.lang || 'auto';
+$('#lang').onchange = (e) => { s.lang = e.target.value; save(); translate(); };
+
 $('#showPanel').checked = s.showPanel;
 $('#showPanel').onchange = (e) => { s.showPanel = e.target.checked; save(); };
 
 // Section layout editor (shared with the popup's Customize mode).
 let surface = 'popup';
-const drawLayout = () => renderLayoutEditor($('#layout'), resolveLayout(s.layout?.[surface], surface),
-  (list) => { s.layout = { ...(s.layout || {}), [surface]: list }; save(); drawLayout(); });
+function drawLayout() {
+  renderLayoutEditor($('#layout'), resolveLayout(s.layout?.[surface], surface),
+    (list) => { s.layout = { ...(s.layout || {}), [surface]: list }; save(); drawLayout(); });
+}
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => {
   surface = b.dataset.surface;
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
   drawLayout();
 };
 $('#resetLayout').onclick = () => { const l = { ...(s.layout || {}) }; delete l[surface]; s.layout = l; save(); drawLayout(); };
-drawLayout();
+
 $('#onlyModules').checked = s.onlyModules;
 $('#onlyModules').onchange = (e) => { s.onlyModules = e.target.checked; save(); };
-const hiddenLabel = () => { $('#hiddenCount').textContent = `${s.hiddenItems.length + s.doneItems.length} item(s) hidden or marked done.`; };
-hiddenLabel();
+function hiddenLabel() { const n = s.hiddenItems.length + s.doneItems.length; $('#hiddenCount').textContent = t('o_hidden_n', { n }); $('#resetItems').disabled = !n; }
 $('#resetItems').onclick = () => { s.hiddenItems = []; s.doneItems = []; hiddenLabel(); save(); };
 $('#studyLog').checked = s.studyLog && (await chrome.permissions.contains({ permissions: ['history'] }));
 $('#studyLog').onchange = async (e) => {
@@ -58,7 +71,7 @@ if (mods.length) {
   const wrap = $('#modules'); wrap.textContent = '';
   for (const c of mods) {
     const l = document.createElement('label');
-    l.innerHTML = '<span></span><input type="checkbox">';
+    l.innerHTML = '<span></span><input type="checkbox" class="switch">';
     l.querySelector('span').textContent = c.name;
     const box = l.querySelector('input');
     box.checked = !s.hiddenCourses.includes(c.id);
@@ -69,3 +82,4 @@ if (mods.length) {
     wrap.append(l);
   }
 }
+translate();

@@ -143,7 +143,54 @@ test('layout: defaults, saved order kept, unknown ids dropped, new sections appe
   assert.equal(resolveLayout(null, 'panel').find((x) => x.id === 'completion').on, false);
   const saved = [{ id: 'catchup', on: true }, { id: 'gone', on: true }, { id: 'missing', on: false }];
   const r = resolveLayout(saved, 'popup');
-  assert.deepEqual(r.slice(0, 2), [{ id: 'catchup', on: true }, { id: 'missing', on: false }]);
+  const ids = r.map((x) => x.id);
+  assert.equal(ids[0], 'catchup');
+  assert.ok(ids.indexOf('catchup') < ids.indexOf('missing'), 'user order kept');
+  assert.equal(r.find((x) => x.id === 'missing').on, false);
   assert.ok(!r.some((x) => x.id === 'gone'));
-  assert.deepEqual(r.map((x) => x.id).sort(), ['catchup', 'changes', 'completion', 'due', 'missing']);
+  assert.deepEqual(r.map((x) => x.id).sort(), ['catchup', 'changes', 'completion', 'due', 'missing', 'week']);
+});
+
+test('layout: new section slots in at its default position in old saved layouts', async () => {
+  const { resolveLayout } = await import('../src/lib/view.js');
+  const old = [{ id: 'missing', on: true }, { id: 'due', on: false }, { id: 'changes', on: true }, { id: 'catchup', on: true }, { id: 'completion', on: true }];
+  assert.deepEqual(resolveLayout(old, 'popup').map((x) => x.id), ['missing', 'week', 'due', 'changes', 'catchup', 'completion']);
+});
+
+test('i18n: every English key has a Chinese translation, and placeholders match', async () => {
+  const { KEYS, setLang, t } = await import('../src/lib/i18n.js');
+  const missingZh = KEYS.en.filter((k) => !KEYS.zh.includes(k));
+  assert.deepEqual(missingZh, []);
+  for (const k of KEYS.en) {
+    setLang('en'); const en = (t(k).match(/\{\w+\}/g) || []);
+    setLang('zh'); const zh = (t(k).match(/\{\w+\}/g) || []);
+    assert.equal(en.length, 0, `en ${k} left a placeholder`);
+    assert.equal(zh.length, 0, `zh ${k} left a placeholder`);
+  }
+  setLang('zh'); assert.equal(t('overdue_days', { n: 3 }), '逾期 3 天');
+  setLang('en'); assert.equal(t('due_title', { n: 14 }), 'Due in the next 14 days');
+  assert.equal(setLang('auto') === 'zh' || setLang('auto') === 'en', true);
+});
+
+test('calendar: kinds, week buckets, ics', async () => {
+  const { eventKind, week, toICS } = await import('../src/lib/calendar.js');
+  assert.equal(eventKind({ type: 'assign', name: 'Assignment 3' }), 'assign');
+  assert.equal(eventKind({ type: 'quiz', name: 'Week 5 quiz' }), 'quiz');
+  assert.equal(eventKind({ type: 'quiz', name: 'Mock Exam 1' }), 'exam');
+  assert.equal(eventKind({ type: 'assign', name: 'In-class Test 2' }), 'exam');
+  assert.equal(eventKind({ type: 'assign', name: 'Latest submission' }), 'assign');
+  assert.equal(eventKind({ type: 'forum', name: 'Discussion' }), 'other');
+  const now = new Date(2026, 9, 27, 10).getTime();
+  const ds = [{ id: 'a', due: new Date(2026, 9, 27, 23, 59).getTime(), name: 'A' },
+              { id: 'b', due: new Date(2026, 9, 29, 9).getTime(), name: 'B' },
+              { id: 'c', due: new Date(2026, 10, 9).getTime(), name: 'C' }];
+  const w = week(ds, now);
+  assert.equal(w.length, 7);
+  assert.deepEqual(w.map((d) => d.items.map((x) => x.id).join('')), ['a', '', 'b', '', '', '', '']);
+  const ics = toICS([{ id: 'assign:12,3', due: Date.UTC(2026, 9, 28, 15, 59), name: 'Essay; draft, v2', code: 'EAP048', url: 'https://core.xjtlu.edu.cn/mod/assign/view.php?id=1', course: 'EAP' }], Date.UTC(2026, 9, 27));
+  assert.match(ics, /^BEGIN:VCALENDAR\r\n/);
+  assert.match(ics, /DTEND:20261028T155900Z/);
+  assert.match(ics, /SUMMARY:EAP048 Essay\\; draft\\, v2/);
+  assert.match(ics, /UID:lmc-assign:123@core.xjtlu.edu.cn/);
+  assert.ok(ics.split('\r\n').every((l) => new TextEncoder().encode(l).length <= 75), 'lines folded');
 });

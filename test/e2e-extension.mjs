@@ -11,7 +11,7 @@ const profile = `${OUT}/profile`;
 const s = JSON.parse(fs.readFileSync(`${process.env.HOME}/.xjtlu-session-mcp/session.json`, 'utf8'));
 
 const ctx = await chromium.launchPersistentContext(profile, {
-  headless: true, channel: 'chromium',
+  headless: true, channel: 'chromium', acceptDownloads: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
 await ctx.addCookies(s.cookies.filter((c) => c.domain.replace(/^\./, '').endsWith('xjtlu.edu.cn')).map((c) => ({
@@ -32,7 +32,7 @@ await seedPage.close();
 const popup = await ctx.newPage();
 popup.on('console', (m) => { if (m.type() === 'error') errs.push('popup: ' + m.text()); });
 popup.on('pageerror', (e) => errs.push('popup pageerror: ' + e.message));
-await popup.setViewportSize({ width: 360, height: 600 });
+await popup.setViewportSize({ width: 380, height: 600 });
 await popup.goto(`chrome-extension://${id}/src/popup/popup.html`);
 const t = Date.now();
 // Grant the optional history permission the way Settings would (Playwright auto-accepts).
@@ -57,7 +57,7 @@ await popup.click('#edit');
 await popup.waitForSelector('ol.layout li');
 await popup.click('ol.layout li[data-id="completion"] input');
 await popup.waitForTimeout(300);
-for (let i = 0; i < 3; i++) { await popup.click('ol.layout li[data-id="catchup"] .up'); await popup.waitForTimeout(250); }
+for (let i = 0; i < 4; i++) { await popup.click('ol.layout li[data-id="catchup"] .up'); await popup.waitForTimeout(250); }
 await popup.screenshot({ path: `${OUT}/customize.png`, fullPage: true });
 await popup.click('.editbar .done');
 await popup.waitForTimeout(400);
@@ -83,6 +83,28 @@ await dash.waitForTimeout(3000);
 const panel = await dash.$('.lmc-panel');
 console.log('dashboard url', new URL(dash.url()).pathname, 'panel injected', !!panel);
 if (panel) await panel.screenshot({ path: `${OUT}/panel.png` });
+
+// Chinese: switch language in Settings, screenshot popup, settings and panel in zh.
+await opts.selectOption('#lang', 'zh');
+await opts.waitForTimeout(500);
+await opts.screenshot({ path: `${OUT}/settings-zh.png`, fullPage: true });
+const zhLeft = await opts.evaluate(() => [...document.querySelectorAll('h2, label > span, .tabs button, #layout strong')].map((n) => n.textContent).filter((x) => /[A-Za-z]{4,}/.test(x) && !/Learning Mall|LM|English|PingFang/.test(x)));
+console.log('settings zh untranslated', JSON.stringify(zhLeft.slice(0, 8)));
+// Reset the custom layout so the zh popup shows the default (week near the top).
+await opts.evaluate(async () => { const { settings } = await chrome.storage.local.get('settings'); await chrome.storage.local.set({ settings: { ...settings, layout: null } }); });
+await popup.reload(); await popup.waitForTimeout(800);
+const zhSections = await popup.$$eval('section h3 > span:first-child', (hs) => hs.map((h) => h.textContent));
+console.log('popup zh sections', JSON.stringify(zhSections), 'html lang', await popup.evaluate(() => document.documentElement.lang));
+const weekInfo = await popup.$$eval('.week .day', (ds) => ds.map((d) => d.querySelector('.dow').textContent + d.querySelector('.dnum').textContent + ':' + [...d.querySelectorAll('.chip')].map((c) => c.className.replace('chip ', '') + '/' + c.textContent).join('|')));
+console.log('week', JSON.stringify(weekInfo));
+await popup.screenshot({ path: `${OUT}/popup-zh.png`, fullPage: true });
+// ICS download from the week card
+const [dl] = await Promise.all([popup.waitForEvent('download', { timeout: 5000 }).catch(() => null), popup.click('button.ics')]);
+if (dl) { const fp = `${OUT}/deadlines.ics`; await dl.saveAs(fp); const txt = fs.readFileSync(fp, 'utf8'); console.log('ics events', (txt.match(/BEGIN:VEVENT/g) || []).length, 'bytes', txt.length); }
+else console.log('ics download: none');
+await dash.reload({ waitUntil: 'domcontentloaded' }); await dash.waitForTimeout(3000);
+const panelZh = await dash.$('.lmc-panel');
+if (panelZh) { await panelZh.screenshot({ path: `${OUT}/panel-zh.png` }); console.log('panel zh title', await dash.$eval('.lmc-title', (n) => n.textContent)); }
 
 const badge = await sw.evaluate(async () => ({ text: await chrome.action.getBadgeText({}), title: await chrome.action.getTitle({}) }));
 console.log('badge', JSON.stringify(badge));

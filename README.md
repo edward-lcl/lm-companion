@@ -1,4 +1,4 @@
-# LM Companion
+# LM Companion · LM 学习助手
 
 What's due, what's missing and what changed on XJTLU Learning Mall, in one click. No AI, no account
 and no setup: install it, sign in to Learning Mall as usual, and it works.
@@ -10,7 +10,16 @@ and no setup: install it, sign in to Learning Mall as usual, and it works.
   modules.
 - **What changed:** new materials, grades, feedback and deadline reminders since you last looked. Forum
   posts and announcements are available but off by default. Each kind is a toggle.
+- **Next 7 days:** a week strip with each deadline as a coloured chip: assignments, quizzes, and
+  exams or mock tests in red. **Add to calendar** downloads an `.ics` file you can import into
+  Apple, Google or Outlook Calendar, including deadlines that only appear on course pages.
+- **Catch up:** per module, released material you haven't marked done. Turn on the optional study log
+  to also count what you've actually opened (reads only Learning Mall pages in this browser's
+  history, kept on your device).
 - **Course completion:** per-module progress bars.
+- **Your layout:** turn any section on or off and reorder them from the popup (the pencil icon) or
+  Settings. The popup and the dashboard panel each keep their own layout.
+- **中文界面:** follows your browser language, or pick 简体中文 / English in Settings.
 - **Dashboard panel (optional):** the same view as a block on your Learning Mall Dashboard. Off by
   default; turn it on in Settings.
 - **Honest failures:** if you're signed out or Learning Mall changes, it says so instead of showing an
