@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "LM Companion",
+  "description": "What's due, what's missing and what changed on XJTLU Learning Mall. Runs in your browser; nothing leaves it.",
+  "version": "0.1.0",
+  "permissions": [
+    "storage",
+    "alarms",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://core.xjtlu.edu.cn/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "LM Companion"
+  },
+  "options_page": "src/options/options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://core.xjtlu.edu.cn/my/",
+        "https://core.xjtlu.edu.cn/my/index.php*"
+      ],
+      "js": [
+        "src/content/panel.js"
+      ],
+      "css": [
+        "src/content/panel.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/lib/view.js",
+        "src/lib/sync.js",
+        "src/lib/moodle.js"
+      ],
+      "matches": [
+        "https://core.xjtlu.edu.cn/*"
+      ]
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApOtwii8sxFtC6N1VVNysP1xWwMeIjLjwd98WMdArZ1URGUO79TXC1Z2HL/t8ooZjpgARtZXYnmB33E5kV1/pnBCszzWkZFEqPXuwStBIG35sR8GhF9SMsUfCI8cnCGZRkwIPi4fZ+XiV5J0iYbONCy3HDucoc5Gcqx1LDkLFZxvFE75DMKCX4fyUynMolkS50jVN5Dw5ZyL0h3zeKmtfLiAf4po0Js2d/K/YOsdfGYcEb4qdoQ6kR/hvW5m4kfp6Ubx/XAutYFig8dN7Mk9O7hkJZ3LZ0FYbj9f+BFM2xoLX0viepnKal01J3ZuCXA9G++65Dz7K76odkW5rpLT+iQIDAQAB"
+}

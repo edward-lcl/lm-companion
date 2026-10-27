@@ -1,0 +1,13 @@
+{
+  "name": "lm-companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "What's due, what's missing and what changed on XJTLU Learning Mall.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": { "linkedom": "^0.18.0" }
+}
