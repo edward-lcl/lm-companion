@@ -1,10 +1,10 @@
 // Fetch real Learning Mall pages once so the parsers are built against actual markup.
 // Output goes to test/fixtures/private/ (gitignored: contains personal data).
 import fs from 'node:fs';
-const M = '/Users/edward/.local/share/xjtlu-core-mcp/node_modules/xjtlu-core-mcp/src/moodle/client.js';
+const M = process.env.XJTLU_CORE_CLIENT || `${process.env.HOME}/.local/share/xjtlu-core-mcp/node_modules/xjtlu-core-mcp/src/moodle/client.js`;
 const { MoodleClient } = await import(M);
 const c = new MoodleClient({});
-const out = '/Users/edward/Projects/lm-companion/test/fixtures/private';
+const out = new URL('./fixtures/private', import.meta.url).pathname;
 fs.mkdirSync(out, { recursive: true });
 const save = (name, body) => { fs.writeFileSync(`${out}/${name}`, body); console.log('saved', name, body.length); };
 save('my.html', await c.html('/my/'));

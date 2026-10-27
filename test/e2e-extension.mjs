@@ -2,10 +2,10 @@
 // cookies into a throwaway profile, trigger a sync and screenshot the popup + settings + dashboard panel.
 // The school's SSO gateway is never visited (only core.xjtlu.edu.cn with existing cookies).
 import fs from 'node:fs';
-import { chromium } from '/Users/edward/.local/share/xjtlu-core-mcp/node_modules/xjtlu-core-mcp/node_modules/playwright-core/index.mjs';
+const { chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 
-const EXT = '/Users/edward/Projects/lm-companion';
-const OUT = '/Users/edward/.hermes/cache/scratch/lmc-shots';
+const EXT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const OUT = process.env.LMC_SHOTS || `${process.env.TMPDIR || '/tmp'}/lmc-shots`;
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const profile = `${OUT}/profile`;
 const s = JSON.parse(fs.readFileSync(`${process.env.HOME}/.xjtlu-session-mcp/session.json`, 'utf8'));
