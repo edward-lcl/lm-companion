@@ -2,6 +2,7 @@
 import { classify, visibleChanges } from './sync.js';
 import { t, tAction, locale } from './i18n.js';
 import { eventKind, week as buildWeek, toICS } from './calendar.js';
+import { checklist } from './reminders.js';
 
 const fmtTime = (d) => d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit', hour12: !locale() });
 const fmtDue = (ms, now = Date.now()) => {
@@ -57,12 +58,12 @@ const ago = (ms, now) => { const d = Math.floor((now - ms) / 86400000); return d
 
 // Sections are a registry. The user's layout (per surface: popup / panel) is an ordered list of
 // { id, on }. New sections appear automatically in saved layouts.
-export const SECTIONS = ['missing', 'due', 'week', 'changes', 'catchup', 'completion']
+export const SECTIONS = ['today', 'missing', 'due', 'week', 'changes', 'catchup', 'completion']
   .map((id) => ({ id, get label() { return t(`sec_${id}`); }, get hint() { return t(`sec_${id}_hint`); } }));
 export const DEFAULT_LAYOUT = {
-  popup: [{ id: 'missing', on: true }, { id: 'week', on: true }, { id: 'due', on: true }, { id: 'changes', on: true },
+  popup: [{ id: 'today', on: true }, { id: 'missing', on: false }, { id: 'week', on: true }, { id: 'due', on: true }, { id: 'changes', on: true },
           { id: 'catchup', on: true }, { id: 'completion', on: true }],
-  panel: [{ id: 'missing', on: true }, { id: 'due', on: true }, { id: 'week', on: false }, { id: 'changes', on: true },
+  panel: [{ id: 'today', on: true }, { id: 'missing', on: true }, { id: 'due', on: true }, { id: 'week', on: false }, { id: 'changes', on: true },
           { id: 'catchup', on: true }, { id: 'completion', on: false }],
 };
 // Merge a saved layout with the registry: keeps the user's order, drops unknown ids, appends new
@@ -140,6 +141,29 @@ export function render(root, { snapshot, status, changes = [], settings, lastSee
   const dueLimit = compact ? 6 : 50;
 
   const build = {
+    // Daily checklist: overdue + due today + due before noon tomorrow, with tick boxes.
+    today: () => {
+      const c = checklist(snapshot.deadlines, now, settings);
+      const row = (d, isDone) => {
+        const box = el('input', { type: 'checkbox', class: 'tick', 'aria-label': t('btn_done') });
+        box.checked = isDone;
+        if (actions?.tick) box.onchange = () => actions.tick(d.id, box.checked); else box.disabled = true;
+        const li = el('li', { class: `check k-${eventKind(d)} ${isDone ? 'done' : ''} ${d.overdue ? 'overdue' : ''}` }, box,
+          el('div', { class: 'body' },
+            el('a', { href: d.url || '#', class: 'name', title: decode(d.name) }, cleanTitle(d.name)),
+            el('div', { class: 'meta' }, el('span', { class: 'code' }, shortCourse(d)), ' · ', el('span', { class: 'due' }, fmtDue(d.due, now)),
+              !isDone && d.action && d.actionable !== false ? [' · ', el('a', { href: d.url || '#', class: 'go' }, tAction(d.action), ' ›')] : null),
+            !isDone && d.note ? el('div', { class: 'note' }, `⚠ ${t('note_closed')}`) : null));
+        return li;
+      };
+      const head = t('today_title', { d: new Date(now).toLocaleDateString(locale(), { month: 'short', day: 'numeric', weekday: 'short' }) });
+      if (!c.total) return sec(head, null, el('p', { class: 'empty clear' }, '✓ ', t('today_clear')), 'today');
+      const s = sec(head, c.todo.length || null, el('ul', { class: 'checklist' },
+        c.todo.slice(0, compact ? 5 : 20).map((d) => row(d, false)), c.done.map((d) => row(d, true))), 'today');
+      if (c.done.length) s.querySelector('h3').append(el('span', { class: 'prog' }, t('today_done', { a: c.done.length, b: c.total })));
+      return s;
+    },
+
     missing: () => missing.length
       ? sec(t('sec_missing'), missing.length, el('ul', {}, missing.map((d) => item(d, now, actions))), 'missing') : null,
 

@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   doneItems: [],                    // per-item "I've handled this" (stays visible elsewhere, leaves Missing/Due)
   studyLog: false,                  // optional: use browser history of Learning Mall pages (needs the history permission)
   refreshMinutes: 60,
+  doneAt: {},                       // id -> when it was ticked off (for today's checklist)
+  remind: { on: false, morning: true, morningAt: '08:00', before: [24, 2] },   // notifications (optional permission)
   lang: 'auto',                     // 'auto' (follow browser) | 'en' | 'zh'
   layout: null,                     // per surface { popup: [{id,on}], panel: [...] }; null = defaults (see view.js)
 };
@@ -18,7 +20,8 @@ export const DEFAULT_SETTINGS = {
 export async function getSettings(storage) {
   const { settings } = await storage.get('settings');
   return { ...DEFAULT_SETTINGS, ...(settings || {}),
-           changes: { ...DEFAULT_SETTINGS.changes, ...(settings?.changes || {}) } };
+           changes: { ...DEFAULT_SETTINGS.changes, ...(settings?.changes || {}) },
+           remind: { ...DEFAULT_SETTINGS.remind, ...(settings?.remind || {}) } };
 }
 
 // Pure diff, unit-tested: previous + current -> change list (kinds the settings can toggle).

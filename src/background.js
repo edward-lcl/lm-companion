@@ -2,6 +2,7 @@
 // workers, so HTML parsing happens in an offscreen document.
 import { sync, getSettings, visibleChanges, classify } from './lib/sync.js';
 import { setLang, t } from './lib/i18n.js';
+import { plan, nextAt, digest } from './lib/reminders.js';
 
 const storage = {
   get: (k) => chrome.storage.local.get(k),
@@ -39,6 +40,7 @@ async function runSync() {
   running ||= sync({ storage, parse, history }).finally(() => { running = null; });
   const res = await running;
   await updateBadge();
+  await schedule();
   return res;
 }
 
@@ -63,14 +65,65 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes, delayInMinutes: 0.1 });
 });
 chrome.runtime.onStartup.addListener(() => runSync().catch(() => {}));
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'sync') runSync().catch(() => {}); });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'sync') runSync().catch(() => {});
+  else if (a.name === 'morning') morning().catch(() => {});
+  else if (a.name.startsWith('r:')) remind(a.name.slice(2)).catch(() => {});
+});
+
+// ---- reminders: alarms -> system notifications. Needs the optional "notifications" permission.
+const canNotify = () => chrome.permissions.contains({ permissions: ['notifications'] });
+async function schedule() {
+  const settings = await getSettings(storage);
+  const { snapshot, sentReminders = {} } = await chrome.storage.local.get(['snapshot', 'sentReminders']);
+  for (const a of await chrome.alarms.getAll()) if (a.name === 'morning' || a.name.startsWith('r:')) await chrome.alarms.clear(a.name);
+  if (!settings.remind.on || !snapshot || !(await canNotify())) return;
+  if (settings.remind.morning) chrome.alarms.create('morning', { when: nextAt(settings.remind.morningAt) });
+  for (const r of plan(snapshot.deadlines, Date.now(), settings, sentReminders).slice(0, 40)) chrome.alarms.create(`r:${r.key}`, { when: r.when });
+}
+async function notify(id, title, message, url) {
+  if (!(await canNotify())) return;
+  const { notifyUrls = {} } = await chrome.storage.local.get('notifyUrls');
+  notifyUrls[id] = url; await chrome.storage.local.set({ notifyUrls });
+  chrome.notifications.create(id, { type: 'basic', iconUrl: chrome.runtime.getURL('icons/128.png'), title, message, priority: 1 });
+}
+async function remind(key) {
+  const settings = await getSettings(storage); setLang(settings.lang);
+  const { snapshot, sentReminders = {} } = await chrome.storage.local.get(['snapshot', 'sentReminders']);
+  const [id, hours] = [key.slice(0, key.lastIndexOf('@')), Number(key.slice(key.lastIndexOf('@') + 1))];
+  const d = snapshot?.deadlines.find((x) => x.id === id);
+  sentReminders[key] = Date.now(); await chrome.storage.local.set({ sentReminders });
+  if (!d || d.submitted || (settings.doneItems || []).includes(id) || (settings.hiddenItems || []).includes(id)) return;
+  const time = new Date(d.due).toLocaleString(settings.lang === 'zh' || (settings.lang !== 'en' && navigator.language.startsWith('zh')) ? 'zh-CN' : undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  await notify(`r:${key}`, t(hours >= 24 ? 'n_due_tomorrow' : 'n_due_soon', { h: hours }), `${d.code ? d.code + ' · ' : ''}${d.name.replace(/\s*\(.*?\)\s*/g, ' ').trim()}\n${time}`, d.url);
+}
+async function morning() {
+  const settings = await getSettings(storage); setLang(settings.lang);
+  const { snapshot } = await chrome.storage.local.get('snapshot');
+  chrome.alarms.create('morning', { when: nextAt(settings.remind.morningAt) });
+  if (!snapshot) return;
+  const g = digest(snapshot.deadlines, Date.now(), settings);
+  if (!g.items.length) return;   // nothing to do today: stay quiet
+  const lines = g.items.slice(0, 4).map((d) => `${d.code || ''} ${d.name.replace(/\s*\(.*?\)\s*/g, ' ').trim()}`.trim());
+  await notify(`m:${Date.now()}`, t('n_morning', { n: g.items.length }), lines.join('\n'), 'https://core.xjtlu.edu.cn/my/');
+}
+chrome.permissions.onAdded.addListener(() => { bindNotifications(); schedule(); });
+function bindNotifications() {
+  if (!chrome.notifications || bindNotifications.done) return; bindNotifications.done = true;
+  chrome.notifications.onClicked.addListener(async (id) => {
+  const { notifyUrls = {} } = await chrome.storage.local.get('notifyUrls');
+  if (notifyUrls[id]) chrome.tabs.create({ url: notifyUrls[id] });
+  chrome.notifications.clear(id);
+  });
+}
+bindNotifications();
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.target === 'offscreen') return;  // handled there
   if (msg.cmd === 'refresh') { runSync().then(reply, (e) => reply({ state: 'error', detail: String(e) })); return true; }
   if (msg.cmd === 'badge') { updateBadge().then(() => reply({})); return true; }
   if (msg.cmd === 'settings_changed') {
-    getSettings(storage).then((s) => { chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes }); return updateBadge(); }).then(() => reply({}));
+    getSettings(storage).then((s) => { chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes }); return updateBadge(); }).then(schedule).then(() => reply({}));
     return true;
   }
 });

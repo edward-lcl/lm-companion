@@ -30,7 +30,13 @@
     setLang(s.lang);
     title.textContent = t('panel_title');
     setCollapsed(collapsed);
-    render(body, { ...data, settings: s }, { compact: true, surface: 'panel' });
+    const actions = { async tick(id, on) {
+      const x = await getSettings(storage); const doneAt = { ...(x.doneAt || {}) };
+      if (on) { doneAt[id] = Date.now(); x.doneItems = [...new Set([...(x.doneItems || []), id])]; }
+      else { delete doneAt[id]; x.doneItems = (x.doneItems || []).filter((y) => y !== id); }
+      x.doneAt = doneAt; await chrome.storage.local.set({ settings: x }); chrome.runtime.sendMessage({ cmd: 'settings_changed' });
+    } };
+    render(body, { ...data, settings: s }, { compact: true, surface: 'panel', actions });
   };
   await draw();
   chrome.storage.onChanged.addListener(draw);

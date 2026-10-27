@@ -98,6 +98,23 @@ console.log('popup zh sections', JSON.stringify(zhSections), 'html lang', await 
 const weekInfo = await popup.$$eval('.week .day', (ds) => ds.map((d) => d.querySelector('.dow').textContent + d.querySelector('.dnum').textContent + ':' + [...d.querySelectorAll('.chip')].map((c) => c.className.replace('chip ', '') + '/' + c.textContent).join('|')));
 console.log('week', JSON.stringify(weekInfo));
 await popup.screenshot({ path: `${OUT}/popup-zh.png`, fullPage: true });
+// Today checklist: tick the first open item, confirm it moves to done, then untick it.
+const todayBefore = await popup.$$eval('section[data-section="today"] li.check', (ls) => ls.map((l) => (l.classList.contains('done') ? 'done:' : '') + l.querySelector('.name').textContent));
+console.log('today', JSON.stringify(todayBefore), 'title', await popup.$eval('section[data-section="today"] h3', (h) => h.textContent).catch(() => 'none'));
+if (await popup.$('section[data-section="today"] input.tick')) {
+  await popup.click('section[data-section="today"] li.check:not(.done) input.tick'); await popup.waitForTimeout(600);
+  const afterTick = await popup.$$eval('section[data-section="today"] li.check', (ls) => ls.map((l) => (l.classList.contains('done') ? 'done:' : '') + l.querySelector('.name').textContent));
+  console.log('after tick', JSON.stringify(afterTick));
+  await popup.screenshot({ path: `${OUT}/popup-today.png`, fullPage: true });
+  await popup.click('section[data-section="today"] li.check.done input.tick'); await popup.waitForTimeout(600);
+  const restored = await popup.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+  console.log('untick restored', JSON.stringify(restored.doneItems), JSON.stringify(restored.doneAt));
+}
+// Reminder settings render (permission prompt can't be answered headless).
+await opts.reload(); await opts.waitForTimeout(500);
+const remindUI = await opts.evaluate(() => ({ on: document.querySelector('#remindOn').checked, before: [...document.querySelectorAll('[data-before]')].filter((b) => b.checked).map((b) => b.dataset.before), at: document.querySelector('#morningAt').value }));
+console.log('remind ui', JSON.stringify(remindUI));
+await opts.screenshot({ path: `${OUT}/settings-zh2.png`, fullPage: true });
 // ICS download from the week card
 const [dl] = await Promise.all([popup.waitForEvent('download', { timeout: 5000 }).catch(() => null), popup.click('button.ics')]);
 if (dl) { const fp = `${OUT}/deadlines.ics`; await dl.saveAs(fp); const txt = fs.readFileSync(fp, 'utf8'); console.log('ics events', (txt.match(/BEGIN:VEVENT/g) || []).length, 'bytes', txt.length); }

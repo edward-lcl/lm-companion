@@ -21,6 +21,14 @@
  .tabs button{font:inherit;font-size:13px;border:0;background:none;color:var(--muted);border-radius:7px;padding:3px 14px;cursor:pointer}
  .tabs button.on{background:var(--glass-strong);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.1)}
  .sechint{margin:0 0 8px 14px}
+ .row{display:flex;align-items:center;gap:10px}
+ input[type=time]{font:inherit;color:var(--fg);background:var(--glass-strong);border:1px solid var(--hair);border-radius:8px;padding:2px 6px}
+ .chips{flex-wrap:wrap;justify-content:flex-end;gap:6px}
+ label.opt{display:inline-flex;align-items:center;gap:0;cursor:pointer}
+ label.opt input{display:none}
+ label.opt span{font-size:12px;padding:3px 10px;border-radius:12px;background:var(--hair);color:var(--muted)}
+ label.opt input:checked + span{background:var(--accent);color:#fff}
+ .group.off label.dep{opacity:.45;pointer-events:none}
  .always{color:var(--accent);font-weight:700;padding-right:8px}
  #layout{background:var(--glass);border:1px solid var(--glass-edge);box-shadow:var(--shadow);border-radius:14px;padding:2px 4px;backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px)}
  #layout li{background:none;border:0;box-shadow:none;border-radius:0;margin:0;border-bottom:1px solid var(--hair);backdrop-filter:none;-webkit-backdrop-filter:none;padding:9px 10px}
@@ -49,6 +57,18 @@
 <div class="tabs"><button type="button" data-surface="popup" class="on" data-i18n="o_tab_popup"></button><button type="button" data-surface="panel" data-i18n="o_tab_panel"></button></div>
 <ol id="layout" class="layout"></ol>
 <button type="button" id="resetLayout" class="link" data-i18n="o_reset_layout"></button>
+
+<h2 data-i18n="o_remind"></h2>
+<div class="group">
+  <label><span><span data-i18n="o_remind_on"></span><small data-i18n="o_remind_on_hint"></small></span><input type="checkbox" class="switch" id="remindOn"></label>
+  <label class="dep"><span><span data-i18n="o_morning"></span><small data-i18n="o_morning_hint"></small></span><span class="row"><input type="time" id="morningAt"><input type="checkbox" class="switch" id="morningOn"></span></label>
+  <label class="dep"><span data-i18n="o_before"></span><span class="row chips">
+    <label class="opt"><input type="checkbox" data-before="24"><span data-i18n="o_b_24"></span></label>
+    <label class="opt"><input type="checkbox" data-before="3"><span data-i18n="o_b_3"></span></label>
+    <label class="opt"><input type="checkbox" data-before="2"><span data-i18n="o_b_2"></span></label>
+    <label class="opt"><input type="checkbox" data-before="1"><span data-i18n="o_b_1"></span></label></span></label>
+  <label class="dep"><span></span><button type="button" class="pill" id="testNotify" data-i18n="o_test"></button></label>
+</div>
 
 <h2 data-i18n="o_due"></h2>
 <div class="group">

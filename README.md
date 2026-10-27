@@ -4,6 +4,11 @@ What's due, what's missing and what changed on XJTLU Learning Mall, in one click
 and no setup: install it, sign in to Learning Mall as usual, and it works.
 
 ## What it does
+- **Today (今日清单):** a daily checklist of what's overdue, due today and due tomorrow morning.
+  Tick things off as you go; ticks reset each day.
+- **Reminders (optional):** a morning checklist notification (skipped on days with nothing due) and
+  reminders 1 day and 2 hours before each deadline. Times are adjustable. Notifications come from
+  your browser; nothing is sent anywhere.
 - **Missing:** work that is past due and still needs a submission, shown in red with a count on the
   toolbar icon.
 - **Due soon:** everything with a Learning Mall due date in the next 7, 14 or 30 days, across all

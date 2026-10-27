@@ -144,17 +144,18 @@ test('layout: defaults, saved order kept, unknown ids dropped, new sections appe
   const saved = [{ id: 'catchup', on: true }, { id: 'gone', on: true }, { id: 'missing', on: false }];
   const r = resolveLayout(saved, 'popup');
   const ids = r.map((x) => x.id);
-  assert.equal(ids[0], 'catchup');
+  assert.equal(ids[0], 'today', 'new Today section leads');
+  assert.equal(ids[1], 'catchup');
   assert.ok(ids.indexOf('catchup') < ids.indexOf('missing'), 'user order kept');
   assert.equal(r.find((x) => x.id === 'missing').on, false);
   assert.ok(!r.some((x) => x.id === 'gone'));
-  assert.deepEqual(r.map((x) => x.id).sort(), ['catchup', 'changes', 'completion', 'due', 'missing', 'week']);
+  assert.deepEqual(r.map((x) => x.id).sort(), ['catchup', 'changes', 'completion', 'due', 'missing', 'today', 'week']);
 });
 
 test('layout: new section slots in at its default position in old saved layouts', async () => {
   const { resolveLayout } = await import('../src/lib/view.js');
   const old = [{ id: 'missing', on: true }, { id: 'due', on: false }, { id: 'changes', on: true }, { id: 'catchup', on: true }, { id: 'completion', on: true }];
-  assert.deepEqual(resolveLayout(old, 'popup').map((x) => x.id), ['missing', 'week', 'due', 'changes', 'catchup', 'completion']);
+  assert.deepEqual(resolveLayout(old, 'popup').map((x) => x.id), ['today', 'missing', 'week', 'due', 'changes', 'catchup', 'completion']);
 });
 
 test('i18n: every English key has a Chinese translation, and placeholders match', async () => {
@@ -193,4 +194,32 @@ test('calendar: kinds, week buckets, ics', async () => {
   assert.match(ics, /SUMMARY:EAP048 Essay\\; draft\\, v2/);
   assert.match(ics, /UID:lmc-assign:123@core.xjtlu.edu.cn/);
   assert.ok(ics.split('\r\n').every((l) => new TextEncoder().encode(l).length <= 75), 'lines folded');
+});
+
+test('reminders: checklist, plan, nextAt', async () => {
+  const { checklist, plan, nextAt, digest } = await import('../src/lib/reminders.js');
+  const now = new Date(2026, 9, 27, 20, 0).getTime();          // Tue 20:00
+  const at = (d, h, m = 0) => new Date(2026, 9, d, h, m).getTime();
+  const ds = [
+    { id: 'late', name: 'Late', code: 'EAP048', due: at(26, 9), overdue: true, actionable: true },
+    { id: 'tonight', name: 'Tonight', code: 'MTH030', due: at(27, 23, 59), overdue: false },
+    { id: 'tmrAm', name: 'Tomorrow 9am', code: 'MTH015', due: at(28, 9), overdue: false },
+    { id: 'tmrPm', name: 'Tomorrow 23:59', code: 'MTH030', due: at(28, 23, 59), overdue: false },
+    { id: 'ticked', name: 'Ticked', code: 'HSS004', due: at(27, 22), overdue: false },
+  ];
+  const settings = { ...DEFAULT_SETTINGS, doneItems: ['ticked'], doneAt: { ticked: at(27, 15) } };
+  const c = checklist(ds, now, settings);
+  assert.deepEqual(c.todo.map((d) => d.id), ['late', 'tonight', 'tmrAm']);
+  assert.deepEqual(c.done.map((d) => d.id), ['ticked']);
+  // ticked yesterday doesn't show as done today
+  assert.equal(checklist(ds, now, { ...settings, doneAt: { ticked: at(26, 15) } }).done.length, 0);
+  assert.equal(digest(ds, now, settings).overdue, 1);
+
+  assert.equal(nextAt('08:00', now), at(28, 8));
+  assert.equal(nextAt('21:30', now), at(27, 21, 30));
+  assert.deepEqual(plan(ds, now, { ...settings, remind: { on: false } }), []);
+  const p = plan(ds, now, { ...settings, remind: { on: true, before: [24, 2] } }, { 'tmrAm@2': 1 });
+  // 24h reminders whose time already passed (tonight, tomorrow 9am) are skipped, not sent late.
+  assert.deepEqual(p.map((r) => r.key), ['tonight@2', 'tmrPm@24', 'tmrPm@2']);
+  assert.ok(p.every((r) => r.when > now));
 });

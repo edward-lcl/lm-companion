@@ -23,6 +23,27 @@ function translate() {
 $('#lang').value = s.lang || 'auto';
 $('#lang').onchange = (e) => { s.lang = e.target.value; save(); translate(); };
 
+// Reminders (notifications are an optional permission, requested from this click).
+const remindGroup = $('#remindOn').closest('.group');
+const syncRemindUI = () => remindGroup.classList.toggle('off', !s.remind.on);
+$('#remindOn').checked = s.remind.on && (await chrome.permissions.contains({ permissions: ['notifications'] }));
+s.remind.on = $('#remindOn').checked; syncRemindUI();
+$('#remindOn').onchange = async (e) => {
+  if (e.target.checked) { const ok = await chrome.permissions.request({ permissions: ['notifications'] }); e.target.checked = ok; s.remind.on = ok; }
+  else s.remind.on = false;
+  syncRemindUI(); await save();
+};
+$('#morningOn').checked = s.remind.morning;
+$('#morningOn').onchange = (e) => { s.remind.morning = e.target.checked; save(); };
+$('#morningAt').value = s.remind.morningAt;
+$('#morningAt').onchange = (e) => { s.remind.morningAt = e.target.value || '08:00'; save(); };
+for (const b of document.querySelectorAll('[data-before]')) {
+  const h = Number(b.dataset.before);
+  b.checked = s.remind.before.includes(h);
+  b.onchange = () => { s.remind.before = b.checked ? [...new Set([...s.remind.before, h])].sort((x, y) => y - x) : s.remind.before.filter((x) => x !== h); save(); };
+}
+$('#testNotify').onclick = () => chrome.notifications?.create('test', { type: 'basic', iconUrl: chrome.runtime.getURL('icons/128.png'), title: t('n_test'), message: t('n_test_body') });
+
 $('#showPanel').checked = s.showPanel;
 $('#showPanel').onchange = (e) => { s.showPanel = e.target.checked; save(); };
 

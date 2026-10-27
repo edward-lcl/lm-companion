@@ -6,6 +6,15 @@ const storage = { get: (k) => chrome.storage.local.get(k), set: (o) => chrome.st
 const root = document.getElementById('root');
 
 const actions = {
+  async tick(id, on) {
+    const s = await getSettings(storage);
+    const doneAt = { ...(s.doneAt || {}) };
+    if (on) { doneAt[id] = Date.now(); s.doneItems = [...new Set([...(s.doneItems || []), id])]; }
+    else { delete doneAt[id]; s.doneItems = (s.doneItems || []).filter((x) => x !== id); }
+    s.doneAt = doneAt;
+    await chrome.storage.local.set({ settings: s });
+    chrome.runtime.sendMessage({ cmd: 'settings_changed' });
+  },
   async mark(list, id) {
     const s = await getSettings(storage);
     s[list] = [...new Set([...(s[list] || []), id])];
