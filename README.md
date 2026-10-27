@@ -48,6 +48,21 @@ and no setup: install it, sign in to Learning Mall as usual, and it works.
    unpacked** and pick the folder.
 3. Sign in to Learning Mall once. The icon fills in within a minute.
 
+### Installing with an AI coding agent (Codex, Claude Code)
+Agents can do everything except the final click, because Chrome only lets a person load an unpacked
+extension.
+1. Download the latest release zip from
+   `https://github.com/edward-lcl/lm-companion/releases/latest` and unzip it to a stable folder the
+   user won't delete (for example `~/Applications/lm-companion`). Don't use a temp folder: Chrome
+   loads the extension from that folder every time.
+2. Open `chrome://extensions` for the user and tell them to: turn on **Developer mode** (top right),
+   click **Load unpacked**, and pick that folder.
+3. Tell them to open Learning Mall and sign in once, then click the toolbar icon. For Chinese, or for
+   reminders, they open Settings (⚙): 语言 → 简体中文, 提醒 → 通知.
+
+The extension needs no API keys, passwords or accounts. Don't ask the user for their Learning Mall
+password.
+
 ## Develop
 ```
 npm install
