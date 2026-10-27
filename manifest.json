@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LM Companion",
   "description": "What's due, what's missing and what changed on XJTLU Learning Mall. Runs in your browser; nothing leaves it.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "permissions": [
     "storage",
     "alarms",
