@@ -35,3 +35,19 @@
 .lmc li.more { color: var(--muted); font-size: 12px; border: 0; }
 .lmc .meta .code { white-space: nowrap; }
 .lmc .meta .due, .lmc .meta .act { white-space: nowrap; }
+.lmc li.item { position: relative; padding-right: 44px; }
+.lmc .acts { position: absolute; right: 0; top: 6px; display: none; gap: 2px; }
+.lmc li.item:hover .acts { display: flex; }
+.lmc button.mini { border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 6px; width: 20px; height: 20px; font-size: 11px; cursor: pointer; padding: 0; }
+.lmc button.mini:hover { color: var(--accent); border-color: var(--accent); }
+.lmc .note { color: var(--warn); font-size: 11px; }
+.lmc .catchup > li { border-bottom: 1px solid var(--line); }
+.lmc .catchup .sub li { border: 0; padding: 2px 0 0 10px; font-size: 12px; }
+.lmc .catchup .sub .name { font-weight: 400; -webkit-line-clamp: 1; }
+.lmc li.urgent .due { color: var(--accent); font-weight: 700; }
+.lmc .note { color: var(--fg); opacity: .8; }
+.lmc details summary { cursor: pointer; list-style: none; padding: 2px 0; }
+.lmc details summary::-webkit-details-marker { display: none; }
+.lmc details summary::before { content: '▸ '; color: var(--muted); }
+.lmc details[open] summary::before { content: '▾ '; }
+.lmc .hint { color: var(--muted); font-size: 11px; margin: 4px 0 0; }

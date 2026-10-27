@@ -4,8 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseHTML as lp } from 'linkedom';
-import { sessionInfo, isLoginPage, parseCourseModules, parseGradeOverview, notificationKind, moduleCode } from '../src/lib/moodle.js';
-import { diff, classify, visibleChanges, DEFAULT_SETTINGS } from '../src/lib/sync.js';
+import { sessionInfo, isLoginPage, parseCourseModules, parseGradeOverview, notificationKind, moduleCode, parseDueDate } from '../src/lib/moodle.js';
+import { diff, classify, visibleChanges, DEFAULT_SETTINGS, mergeCourseDeadlines, engagement } from '../src/lib/sync.js';
 
 const parseHTML = (h) => lp(h).document;
 const P = new URL('./fixtures/private/', import.meta.url);
@@ -65,17 +65,62 @@ test('diff finds new materials, changed grades, new notifications', () => {
   assert.deepEqual(kinds, ['feedback', 'grades', 'materials']);
 });
 
-test('classify: overdue+actionable is missing; window filters upcoming', () => {
+test('classify: overdue unsubmitted is missing (with a note if not actionable); window filters upcoming', () => {
   const now = Date.UTC(2026, 9, 27);
   const d = [
-    { name: 'late', due: now - 86400000, overdue: true, actionable: true },
-    { name: 'late-but-done', due: now - 86400000, overdue: true, actionable: false },
-    { name: 'soon', due: now + 2 * 86400000, overdue: false },
-    { name: 'far', due: now + 40 * 86400000, overdue: false },
+    { id: 'a', name: 'late', code: 'MTH015', due: now - 86400000, overdue: true, actionable: true },
+    { id: 'b', name: 'late-closed', code: 'EAP048', due: now - 86400000, overdue: true, actionable: false },
+    { id: 'c', name: 'scholarship', code: null, due: now - 86400000, overdue: true, actionable: true },
+    { id: 'd', name: 'soon', code: 'MTH030', due: now + 2 * 86400000, overdue: false },
+    { id: 'e', name: 'far', code: 'MTH030', due: now + 40 * 86400000, overdue: false },
+    { id: 'f', name: 'done-by-me', code: 'MTH030', due: now - 3600000, overdue: true, actionable: true },
   ];
-  const { missing, upcoming } = classify(d, now, 14);
-  assert.deepEqual(missing.map((x) => x.name), ['late']);
+  const { missing, upcoming } = classify(d, now, 14, { onlyModules: true, doneItems: ['f'], hiddenItems: [], hiddenCourses: [] });
+  assert.deepEqual(missing.map((x) => x.name), ['late', 'late-closed']);
+  assert.ok(missing[1].note && !missing[0].note);
   assert.deepEqual(upcoming.map((x) => x.name), ['soon']);
+  assert.equal(classify(d, now, 14, { onlyModules: false }).missing.length, 4);
+});
+
+test('course-page due dates parse as Beijing time', () => {
+  assert.equal(parseDueDate('Opens: Monday, 2 November 2026, 00:00 Due: Sunday, 13 December 2026, 23:59'),
+               Date.UTC(2026, 11, 13, 15, 59));
+  assert.equal(parseDueDate('Opened: Monday, 19 October 2026'), null);
+});
+
+test('course-page assignments missing from the timeline are merged, without duplicates or stale ones', () => {
+  const now = Date.UTC(2026, 9, 27);
+  const timeline = [{ id: 'assign:1', name: 'Assignment 11 (Deadline: Wednesday 23:59, Dec 2)', courseId: '9', due: now + 1e9 }];
+  const work = [
+    { id: '1', type: 'assign', name: 'Assignment 11 (Deadline: Wednesday 23:59, Dec 2)', courseId: '9', due: now + 1e9 },
+    { id: '2', type: 'assign', name: 'Coursework: Project Portfolio Part 1.', courseId: '9', code: 'IOT001TC', due: now + 4e9 },
+    { id: '3', type: 'assign', name: 'Artifact 1', courseId: '9', due: now - 30 * 86400000 },
+    { id: '4', type: 'assign', name: 'Done one', courseId: '9', due: now + 1e9, completion: 'done' },
+    { id: '5', type: 'resource', name: 'Slides', courseId: '9', due: now + 1e9 },
+  ];
+  const merged = mergeCourseDeadlines(timeline, work, now);
+  assert.deepEqual(merged.map((x) => x.id), ['assign:1', 'assign-cm:2']);
+  assert.equal(merged[1].source, 'course page');
+});
+
+test('engagement counts unopened released material per module using Done marks and visits', () => {
+  const work = [
+    { id: '1', code: 'HSS004', courseId: '7', type: 'resource', name: 'Week 1', completion: 'done' },
+    { id: '2', code: 'HSS004', courseId: '7', type: 'resource', name: 'Week 2', completion: 'todo' },
+    { id: '3', code: 'HSS004', courseId: '7', type: 'folder', name: 'Week 3', completion: null },
+    { id: '4', code: 'HSS004', courseId: '7', type: 'assign', name: 'Essay' },
+    { id: '5', code: 'MTH015', courseId: '8', type: 'resource', name: 'L1', completion: null },
+  ];
+  const e = engagement(work, { '3': 1000 });
+  const h = e.find((m) => m.code === 'HSS004');
+  assert.equal(h.released, 3); assert.equal(h.opened, 2);
+  assert.deepEqual(h.unopened.map((u) => u.name), ['Week 2']);
+  assert.equal(h.lastVisit, 1000);
+  // Without a study log, untracked items are unknown, not unopened.
+  const noLog = engagement(work, null).find((m) => m.code === 'HSS004');
+  assert.equal(noLog.opened, 1); assert.equal(noLog.unknown, 1);
+  assert.deepEqual(noLog.unopened.map((u) => u.name), ['Week 2']);
+  assert.equal(engagement(work, null).find((m) => m.code === 'MTH015').unopened.length, 0);
 });
 
 test('toggles hide change kinds; forum and announcements off by default', () => {
@@ -83,4 +128,11 @@ test('toggles hide change kinds; forum and announcements off by default', () => 
   const v = visibleChanges(ch, DEFAULT_SETTINGS, 1);
   assert.deepEqual(v.map((x) => x.kind), ['grades']);
   assert.equal(v[0].unseen, true);
+});
+
+test('real course page: completion states and due dates are read', { skip: !fx('course.html') }, () => {
+  const items = parseCourseModules(fx('course.html'), parseHTML);
+  const states = items.map((i) => i.completion);
+  assert.ok(states.includes('done') && states.includes('todo'), JSON.stringify(states));
+  assert.ok(items.some((i) => i.type === 'assign' && i.due), 'an assignment with a due date');
 });

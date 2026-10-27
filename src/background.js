@@ -21,8 +21,21 @@ async function parse(parser, html) {
 }
 
 let running = null;
+// Optional study log: which Learning Mall activity pages you've opened, from this browser's own
+// history. Needs the optional "history" permission, granted from Settings; stays on this device.
+async function history() {
+  if (!(await chrome.permissions.contains({ permissions: ['history'] }))) return null;   // no evidence, not "nothing opened"
+  const items = await chrome.history.search({ text: 'core.xjtlu.edu.cn/mod/', startTime: Date.now() - 180 * 86400000, maxResults: 5000 });
+  const visits = {};
+  for (const h of items) {
+    const m = h.url.match(/^https:\/\/core\.xjtlu\.edu\.cn\/mod\/\w+\/view\.php\?id=(\d+)/);
+    if (m) visits[m[1]] = Math.max(visits[m[1]] || 0, h.lastVisitTime || 0);
+  }
+  return visits;
+}
+
 async function runSync() {
-  running ||= sync({ storage, parse }).finally(() => { running = null; });
+  running ||= sync({ storage, parse, history }).finally(() => { running = null; });
   const res = await running;
   await updateBadge();
   return res;
@@ -35,7 +48,7 @@ async function updateBadge() {
     chrome.action.setBadgeText({ text: '!' }); chrome.action.setBadgeBackgroundColor({ color: '#b3261e' });
     chrome.action.setTitle({ title: 'LM Companion: signed out of Learning Mall' }); return;
   }
-  const missing = snapshot ? classify(snapshot.deadlines, Date.now(), settings.windowDays).missing.length : 0;
+  const missing = snapshot ? classify(snapshot.deadlines, Date.now(), settings.windowDays, settings).missing.length : 0;
   const unseen = visibleChanges(changes, settings, lastSeenAt).filter((c) => c.unseen).length;
   const n = missing + unseen;
   chrome.action.setBadgeText({ text: n ? String(n) : '' });

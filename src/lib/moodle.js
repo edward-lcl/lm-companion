@@ -23,6 +23,16 @@ export function isLoginPage(url, html) {
   return /\/login\/index\.php/.test(url) || (!/id="user-menu-toggle"/.test(html) && /XJTLU Account/.test(html));
 }
 
+// "Due: Sunday, 13 December 2026, 23:59" (course-page activity dates, Beijing time) -> epoch ms.
+const MONTHS = { january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6, august: 7, september: 8, october: 9, november: 10, december: 11 };
+export function parseDueDate(text) {
+  const m = String(text || '').match(/Due:\s*(?:\w+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4}),\s*(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const mon = MONTHS[m[2].toLowerCase()];
+  if (mon == null) return null;
+  return Date.UTC(+m[3], mon, +m[1], +m[4] - 8, +m[5]);   // XJTLU shows UTC+8
+}
+
 // Course page: module ids + names + types (materials only matter for "what changed").
 export function parseCourseModules(html, parseHTML) {
   const doc = parseHTML(html);
@@ -35,7 +45,12 @@ export function parseCourseModules(html, parseHTML) {
     const name = (named?.getAttribute('data-activityname') ||
                   li.querySelector('.instancename, .activityname')?.textContent || '').replace(/\s+/g, ' ').trim();
     const link = li.querySelector('a[href*="/mod/"]')?.getAttribute('href') || null;
-    if (name) items.push({ id, type, name, url: link });
+    // Moodle completion state as shown to the student: Done / To do / not tracked.
+    const btn = li.querySelector('[data-region="completionrequirements"] button');
+    const completion = !btn ? null : /btn-subtle-success|btn-success/.test(btn.className) ? 'done' : 'todo';
+    const datesText = (li.querySelector('[data-region="activity-dates"], .activity-dates')?.textContent || '').replace(/\s+/g, ' ').trim();
+    const due = parseDueDate(datesText);
+    if (name) items.push({ id, type, name, url: link, completion, due });
   }
   return items;
 }
@@ -164,7 +179,7 @@ export class Moodle {
   async materials(courseId) {
     const html = await this.page(`/course/view.php?id=${encodeURIComponent(courseId)}`);
     const items = this.parse ? await this.parse('courseModules', html) : parseCourseModules(html, this.parseHTML);
-    return items.filter((m) => ['resource', 'folder', 'page', 'url', 'book', 'lesson', 'assign', 'quiz'].includes(m.type));
+    return items.filter((m) => ['resource', 'folder', 'page', 'url', 'book', 'lesson', 'assign'].includes(m.type));  // never quizzes
   }
 }
 

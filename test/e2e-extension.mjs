@@ -25,17 +25,29 @@ console.log('extension id', id);
 const errs = [];
 sw.on?.('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
 
+// Seed a little browsing history on Learning Mall so the study log has something to match.
+const seedPage = await ctx.newPage();
+for (const u of ['https://core.xjtlu.edu.cn/my/']) await seedPage.goto(u, { waitUntil: 'domcontentloaded' });
+await seedPage.close();
 const popup = await ctx.newPage();
 popup.on('console', (m) => { if (m.type() === 'error') errs.push('popup: ' + m.text()); });
 popup.on('pageerror', (e) => errs.push('popup pageerror: ' + e.message));
 await popup.setViewportSize({ width: 360, height: 600 });
 await popup.goto(`chrome-extension://${id}/src/popup/popup.html`);
 const t = Date.now();
+// Grant the optional history permission the way Settings would (Playwright auto-accepts).
+// permissions.request opens a prompt that headless Chrome never answers, so race it with a timeout.
+const granted = await popup.evaluate(async () => Promise.race([
+  chrome.permissions.request({ permissions: ['history'] }).catch((e) => 'err:' + e.message),
+  new Promise((r) => setTimeout(() => r('prompt-unanswered'), 3000))]));
+console.log('history permission', granted);
+await popup.evaluate(async () => { const { settings = {} } = await chrome.storage.local.get('settings'); await chrome.storage.local.set({ settings: { ...settings, studyLog: true } }); });
 const res = await popup.evaluate(() => chrome.runtime.sendMessage({ cmd: 'refresh' }));
 console.log('refresh', JSON.stringify(res), `${Date.now() - t}ms`);
 await popup.reload(); await popup.waitForTimeout(800);
 const st = await popup.evaluate(() => chrome.storage.local.get(['status', 'snapshot']));
-console.log('status', JSON.stringify(st.status), 'deadlines', st.snapshot?.deadlines?.length, 'courses', st.snapshot?.courses?.length);
+console.log('status', JSON.stringify(st.status), 'deadlines', st.snapshot?.deadlines?.length, 'courses', st.snapshot?.courses?.length,
+  'studyLog', JSON.stringify(st.snapshot?.studyLog), 'catchup', (st.snapshot?.engagement || []).map((m) => `${m.code}:${m.unopened.length}`).join(','));
 const sections = await popup.$$eval('section h3', (hs) => hs.map((h) => h.textContent));
 console.log('popup sections', sections);
 await popup.screenshot({ path: `${OUT}/popup.png`, fullPage: true });
