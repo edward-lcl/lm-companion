@@ -1,5 +1,5 @@
 // Sync: pulls from Learning Mall, diffs against the last run, stores a snapshot for the popup and panel.
-import { Moodle, SignedOut } from './moodle.js';
+import { Moodle, SignedOut, assignmentPath } from './moodle.js';
 
 export const DEFAULT_SETTINGS = {
   windowDays: 14,
@@ -52,18 +52,19 @@ export function classify(deadlines, now = Date.now(), windowDays = 14, settings 
   const missing = pool.filter((d) => d.overdue && !d.submitted)
     .map((d) => ({ ...d, note: d.actionable ? null : '⚠ Drop-box closed or group-leader-only. Check with your group.' }))
     .sort((a, b) => a.due - b.due);
-  const upcoming = pool.filter((d) => !d.overdue && d.due >= now && d.due <= end).sort((a, b) => a.due - b.due);
+  const upcoming = pool.filter((d) => !d.submitted && !d.overdue && d.due >= now && d.due <= end).sort((a, b) => a.due - b.due);
   return { missing, upcoming };
 }
 
 // Merge course-page due dates into the timeline: catches assignments Moodle's timeline leaves out.
 export function mergeCourseDeadlines(timeline, courseWork, now = Date.now()) {
-  const byName = new Set(timeline.map((d) => `${d.courseId}:${norm(d.name)}`));
+  // Prefer module URL identity; names are only a legacy fallback when no URL exists.
   const extra = [];
   for (const w of courseWork) {
     if (!w.due || w.type !== 'assign' || w.completion === 'done') continue;
     if (w.due < now - 7 * 86400000) continue;   // old course-page dates: unknown submission state, don't nag
-    if (byName.has(`${w.courseId}:${norm(w.name)}`)) continue;
+    if (timeline.some((d) => d.courseId === w.courseId &&
+      (assignmentPath(d.url) && assignmentPath(w.url) ? assignmentPath(d.url) === assignmentPath(w.url) : norm(d.name) === norm(w.name)))) continue;
     extra.push({ id: `assign-cm:${w.id}`, name: w.name, type: 'assign', due: w.due, courseId: w.courseId, course: w.course,
                  code: w.code, overdue: w.due < now, action: null, actionable: false, url: w.url, source: 'course page' });
   }
@@ -88,6 +89,34 @@ export function engagement(courseWork, visits = null, now = Date.now()) {
   }
   for (const m of Object.values(out)) m.unopened.sort((a, b) => (a.firstSeen || 0) - (b.firstSeen || 0));
   return Object.values(out).sort((a, b) => b.unopened.length - a.unopened.length);
+}
+
+// Bounded last-known records, keyed by source ID (never by assignment name).
+export function reconcileAssignments(previous = [], active = [], statuses = {}, now = Date.now(), feedOK = true) {
+  const records = new Map(previous.filter((d) => d.type === 'assign' &&
+    now - (d.lastSeenAt || d.due || 0) <= 90 * 86400000).map((d) => [d.id, { ...d,
+      feedState: feedOK ? 'not-in-active-feed' : d.feedState }]));
+  for (const d of active.filter((d) => d.type === 'assign')) {
+    const same = records.get(d.id) || [...records.values()].find((p) => p.courseId === d.courseId &&
+      assignmentPath(p.url) && assignmentPath(p.url) === assignmentPath(d.url));
+    const id = same?.id || d.id;
+    records.set(id, { ...same, ...d, id, lastSeenAt: now, feedState: 'active' });
+  }
+  for (const d of records.values()) {
+    const evidence = statuses[d.id];
+    if (evidence) {
+      d.statusCheckedAt = now;
+      // Unknown/new markup cannot retract prior positive evidence. Explicit draft/new can.
+      if (evidence.sourceStatus !== 'unknown') {
+        d.sourceStatus = evidence.sourceStatus;
+        d.submitted = evidence.sourceStatus === 'submitted';
+        if (d.submitted) d.firstObservedSubmittedAt ||= now;
+      }
+    }
+    d.sourceStatus ||= 'unknown';
+    d.submitted = d.sourceStatus === 'submitted';
+  }
+  return [...records.values()].sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0)).slice(0, 300);
 }
 
 export async function sync({ storage, parseHTML, parse, history, fetchImpl = (...a) => fetch(...a), now = Date.now() }) {
@@ -133,6 +162,40 @@ export async function sync({ storage, parseHTML, parse, history, fetchImpl = (..
     else for (const k of prev?.materialIds || []) if (k.startsWith(`${c.id}:`)) materials.push({ key: k });  // keep old ids so a failed read doesn't fake "new"
   }
   deadlines = mergeCourseDeadlines(deadlines, courseWork, now);
+  // Seed from the previous active snapshot on upgrade. Failed feed reads are not disappearances.
+  const feedOK = !errors.some((e) => e.startsWith('deadlines:') || e.startsWith('course '));
+  const previousAssignments = prev?.assignmentHistory || (prev?.deadlines || []).map((d) => ({ ...d, lastSeenAt: prev.at }));
+  let assignmentHistory = reconcileAssignments(previousAssignments, deadlines, {}, now, feedOK);
+  // Bootstrap recent course-only assignments even when completion removed them from the feed.
+  // A course completion tick is discovery, NOT submission evidence.
+  for (const w of courseWork) {
+    if (w.type !== 'assign' || !w.due || w.due < now - 90 * 86400000 || !assignmentPath(w.url)) continue;
+    if (assignmentHistory.some((d) => d.courseId === w.courseId && assignmentPath(d.url) === assignmentPath(w.url))) continue;
+    assignmentHistory.push({ ...w, id: `assign-cm:${w.id}`, lastSeenAt: now,
+      feedState: 'not-in-active-feed', sourceStatus: 'unknown', submitted: false });
+  }
+  assignmentHistory = reconcileAssignments(assignmentHistory, [], {}, now, false);
+  const statuses = {};
+  const candidates = assignmentHistory.filter((d) => assignmentPath(d.url))
+    .sort((a, b) => (a.statusAttemptedAt || 0) - (b.statusAttemptedAt || 0)).slice(0, 12);
+  for (const d of candidates) {
+    d.statusAttemptedAt = now; // rotate even failed reads; never starve the rest
+    try { statuses[d.id] = await m.assignmentStatus(d.url); }
+    catch (e) {
+      if (e instanceof SignedOut) {
+        await storage.set({ status: { state: 'signed_out', at: now } });
+        return { state: 'signed_out' };
+      }
+      errors.push(`assignment ${d.id}: ${e.what || e.message}`);
+    }
+  }
+  assignmentHistory = reconcileAssignments(assignmentHistory, [], statuses, now, false);
+  const byId = new Map(assignmentHistory.map((d) => [d.id, d]));
+  deadlines = deadlines.map((d) => {
+    const known = byId.get(d.id) || assignmentHistory.find((p) => p.courseId === d.courseId &&
+      assignmentPath(p.url) && assignmentPath(p.url) === assignmentPath(d.url));
+    return known ? { ...d, id: known.id, submitted: known.submitted === true } : d;
+  });
   const visits = settings.studyLog && history ? await safe('study log', () => history(), null) : null;
   // An empty history with study log on means the log can't see anything yet: treat as no evidence.
   const evidence = visits && Object.keys(visits).length ? visits : null;
@@ -142,7 +205,7 @@ export async function sync({ storage, parseHTML, parse, history, fetchImpl = (..
   const { changes: older = [] } = await storage.get('changes');
   const merged = [...fresh.map((c) => ({ ...c, seenAt: now })), ...older].slice(0, 200);
   const snapshot = {
-    at: now, courses, deadlines, grades, firstSeen,
+    at: now, courses, deadlines, assignmentHistory, grades, firstSeen,
     engagement: engagement(courseWork, evidence, now),
     studyLog: settings.studyLog ? { visitsMatched: visits ? Object.keys(visits).length : 0, permission: visits !== null } : null,
     materialIds: materials.length ? materials.map((x) => x.key) : (prev?.materialIds || []),

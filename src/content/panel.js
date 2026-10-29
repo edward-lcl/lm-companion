@@ -3,6 +3,7 @@
 (async () => {
   const { settings } = await chrome.storage.local.get('settings');
   if (!settings?.showPanel) return;
+  const { companionMode } = await import(chrome.runtime.getURL('src/lib/bar.js'));
   const { render } = await import(chrome.runtime.getURL('src/lib/view.js'));
   const { getSettings } = await import(chrome.runtime.getURL('src/lib/sync.js'));
   const { setLang, t } = await import(chrome.runtime.getURL('src/lib/i18n.js'));
@@ -25,16 +26,18 @@
   toggle.onclick = async () => { setCollapsed(!collapsed); await chrome.storage.local.set({ panelCollapsed: collapsed }); };
 
   const draw = async () => {
-    const data = await chrome.storage.local.get(['snapshot', 'status', 'changes', 'lastSeenAt']);
+    const data = await chrome.storage.local.get(['snapshot', 'status', 'changes', 'lastSeenAt', 'barStatus']);
     const s = await getSettings(storage);
+    const permission = await chrome.runtime.sendMessage({ cmd: 'bar_permission' });
+    host.hidden = !s.showPanel || companionMode(s, data.barStatus, permission === true);
+    host.style.setProperty('display', host.hidden ? 'none' : '', 'important');
+    if (host.hidden) return;
     setLang(s.lang);
     title.textContent = t('panel_title');
     setCollapsed(collapsed);
     const actions = { async tick(id, on) {
-      const x = await getSettings(storage); const doneAt = { ...(x.doneAt || {}) };
-      if (on) { doneAt[id] = Date.now(); x.doneItems = [...new Set([...(x.doneItems || []), id])]; }
-      else { delete doneAt[id]; x.doneItems = (x.doneItems || []).filter((y) => y !== id); }
-      x.doneAt = doneAt; await chrome.storage.local.set({ settings: x }); chrome.runtime.sendMessage({ cmd: 'settings_changed' });
+      const result = await chrome.runtime.sendMessage({ cmd: 'settings_update', operation: { type: 'tick', id, on } });
+      if (result?.state !== 'ok') throw Error(result?.state || 'Settings save failed');
     } };
     render(body, { ...data, settings: s }, { compact: true, surface: 'panel', actions });
   };

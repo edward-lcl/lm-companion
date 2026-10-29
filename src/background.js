@@ -5,6 +5,36 @@ import { setLang, t } from './lib/i18n.js';
 import { plan, nextAt, digest } from './lib/reminders.js';
 import { pressure, freshness } from './lib/time.js';
 import { HOST, buildPayload, mergeMarks } from './lib/bar.js';
+import { refreshHandler, nativeRefreshConnection } from './lib/refresh-bridge.js';
+import { settingsHandler, settingsQueue, settingsRevision, browserSettingsOperation } from './lib/settings-bridge.js';
+
+const serializeSettings = settingsQueue();
+async function applySettings() {
+  const s = await getSettings(storage);
+  await chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes });
+  await updateBadge(); await schedule();
+}
+
+const receiveSettings = settingsHandler({
+  getSettings: () => getSettings({ get: k => chrome.storage.local.get(k) }),
+  setSettings: settings => chrome.storage.local.set({ settings }),
+  permissions: chrome.permissions,
+  serialize: serializeSettings,
+  apply: applySettings,
+  openOptions: () => chrome.runtime.openOptionsPage(),
+  report: result => chrome.runtime.sendNativeMessage(HOST, { cmd: 'settings_result', ...result }),
+});
+const receiveRefresh = refreshHandler({
+  sync: async () => { if (running) await running.catch(() => {}); return runSync(); },
+  push: id => pushToBar(id),
+  report: (id, state) => chrome.runtime.sendNativeMessage(HOST, { cmd: 'refresh_result', id, state }),
+});
+const connectRefresh = nativeRefreshConnection({ runtime: chrome.runtime, permissions: chrome.permissions, host: HOST,
+  onMessage: msg => { (msg?.cmd === 'refresh' ? receiveRefresh(msg) : receiveSettings(msg).then(() => msg?.cmd === 'settings_set' ? pushToBar() : undefined)).catch(() => {}); },
+});
+connectRefresh().catch(() => {});
+chrome.permissions.onAdded.addListener(() => connectRefresh().catch(() => {}));
+chrome.alarms.create('bar-connection', { periodInMinutes: 1 });
 
 const storage = {
   get: (k) => chrome.storage.local.get(k),
@@ -23,7 +53,7 @@ let localParsers = null;
 async function parse(parser, html) {
   if (!chrome.offscreen && typeof DOMParser !== 'undefined') {
     localParsers ||= await import('./lib/moodle.js');
-    const fn = { courseModules: localParsers.parseCourseModules, gradeOverview: localParsers.parseGradeOverview }[parser];
+    const fn = { courseModules: localParsers.parseCourseModules, gradeOverview: localParsers.parseGradeOverview, assignmentStatus: localParsers.parseAssignmentStatus }[parser];
     return fn(html, (h) => new DOMParser().parseFromString(h, 'text/html'));
   }
   await ensureOffscreen();
@@ -59,7 +89,8 @@ async function runSync() {
 
 // ---- LM Bar (Mac menu bar app). Optional: needs the "nativeMessaging" permission and the app
 // installed. Pushes the latest data after every sync and pulls back ticks made in the menu bar.
-async function pushToBar() {
+async function pushToBar(refreshID) {
+  connectRefresh().catch(() => {});
   if (!chrome.runtime.sendNativeMessage) return;
   if (!(await chrome.permissions.contains({ permissions: ['nativeMessaging'] }))) return;
   const settings = await getSettings(storage);
@@ -67,14 +98,18 @@ async function pushToBar() {
   if (!snapshot) return;
   const lang = settings.lang === 'zh' || settings.lang === 'en' ? settings.lang : (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
   try {
-    const r = await chrome.runtime.sendNativeMessage(HOST, { cmd: 'push', payload: buildPayload({ snapshot, status, settings, changes, lastSeenAt, lang }) });
+    const r = await chrome.runtime.sendNativeMessage(HOST, { cmd: 'push', ...(typeof refreshID === 'string' ? { refreshID } : {}), payload: buildPayload({ snapshot, status, settings, changes, lastSeenAt, lang }) });
     await chrome.storage.local.set({ barStatus: { ok: !!r?.ok, at: Date.now(), error: r?.error || null } });
+    if (typeof refreshID === 'string' && !r?.ok) throw new Error('Refresh payload not accepted');
     if (r?.marks) {
-      const { changed, settings: merged } = mergeMarks(settings, r.marks);
-      if (changed) { await chrome.storage.local.set({ settings: merged }); await updateBadge(); }
+      await serializeSettings(async () => {
+        const { changed, settings: merged } = mergeMarks(await getSettings(storage), r.marks);
+        if (changed) { await chrome.storage.local.set({ settings: merged }); await updateBadge(); await schedule(); }
+      });
     }
   } catch (e) {
     await chrome.storage.local.set({ barStatus: { ok: false, at: Date.now(), error: String(e.message || e).slice(0, 120) } });
+    if (typeof refreshID === 'string') throw e;
   }
 }
 
@@ -151,7 +186,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 chrome.runtime.onStartup.addListener(() => runSync().catch(() => {}));
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === 'sync') runSync().catch(() => {});
+  if (a.name === 'bar-connection') connectRefresh().catch(() => {});
+  else if (a.name === 'sync') runSync().catch(() => {});
   else if (a.name === 'morning') morning().catch(() => {});
   else if (a.name.startsWith('r:')) remind(a.name.slice(2)).catch(() => {});
 });
@@ -207,9 +243,23 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.target === 'offscreen') return;  // handled there
   if (msg.cmd === 'refresh') { runSync().then(reply, (e) => reply({ state: 'error', detail: String(e) })); return true; }
   if (msg.cmd === 'badge') { updateBadge().then(() => reply({})); return true; }
+  if (msg.cmd === 'bar_permission') { chrome.permissions.contains({ permissions: ['nativeMessaging'] }).then(reply); return true; }
   if (msg.cmd === 'bar_push') { pushToBar().then(() => chrome.storage.local.get('barStatus')).then((x) => reply(x.barStatus || {})); return true; }
-  if (msg.cmd === 'settings_changed') {
-    getSettings(storage).then((s) => { chrome.alarms.create('sync', { periodInMinutes: s.refreshMinutes }); return updateBadge(); }).then(schedule).then(pushToBar).then(() => reply({}));
+  if (msg.cmd === 'settings_get' || msg.cmd === 'settings_update') {
+    serializeSettings(async () => {
+      let s = await getSettings(storage);
+      if (msg.cmd === 'settings_update') {
+        if (msg.revision !== undefined && msg.revision !== await settingsRevision(s)) return { state: 'conflict', settings: s, revision: await settingsRevision(s) };
+        const next = browserSettingsOperation(s, msg.operation);
+        if ((msg.operation.patch?.remind?.on === true && !(await canNotify())) ||
+            (msg.operation.patch?.studyLog === true && !(await chrome.permissions.contains({ permissions: ['history'] })))) return { state: 'permission_required' };
+        await chrome.storage.local.set({ settings: next });
+        s = await getSettings(storage);
+        if (await settingsRevision(next) !== await settingsRevision(s)) return { state: 'conflict', settings: s, revision: await settingsRevision(s) };
+        try { await applySettings(); } catch { return { state: 'apply_failed', settings: s, revision: await settingsRevision(s) }; }
+      }
+      return { state: 'ok', settings: s, revision: await settingsRevision(s) };
+    }).then(result => { reply(result); if (msg.cmd === 'settings_update' && result.state === 'ok') pushToBar().catch(() => {}); }, () => reply({ state: 'error' }));
     return true;
   }
 });

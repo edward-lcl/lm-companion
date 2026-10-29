@@ -1,5 +1,6 @@
 /* LM Companion: macOS-style "liquid glass". Translucent layered cards over a soft gradient,
    SF / PingFang type, 12–16px radii, hairline borders, vibrancy-like blur. Light + dark. */
+[hidden] { display: none !important; }
 :root {
   --accent: #6e5ce6; --accent-2: #8f7cff;
   --bad: #e5484d; --warn: #b7740a; --ok: #2f9e6e;

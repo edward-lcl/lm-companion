@@ -1,10 +1,10 @@
 // Offscreen document: only job is DOMParser. Service workers have fetch + storage but no DOMParser;
 // offscreen documents have DOMParser but no chrome.storage. So the worker sends HTML here and gets
 // back plain JSON extracted by the same parser functions the tests cover.
-import { parseCourseModules, parseGradeOverview } from './lib/moodle.js';
+import { parseCourseModules, parseGradeOverview, parseAssignmentStatus } from './lib/moodle.js';
 
 const parseHTML = (html) => new DOMParser().parseFromString(html, 'text/html');
-const PARSERS = { courseModules: parseCourseModules, gradeOverview: parseGradeOverview };
+const PARSERS = { courseModules: parseCourseModules, gradeOverview: parseGradeOverview, assignmentStatus: parseAssignmentStatus };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.target !== 'offscreen' || msg.cmd !== 'parse') return;

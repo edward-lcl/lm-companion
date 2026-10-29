@@ -82,6 +82,20 @@ test('classify: overdue unsubmitted is missing (with a note if not actionable); 
   assert.equal(classify(d, now, 14, { onlyModules: false }).missing.length, 4);
 });
 
+test('verified submitted item leaves upcoming and bar payload without hiding same-name assignments', async () => {
+  const { buildPayload } = await import('../src/lib/bar.js');
+  const now = Date.UTC(2026, 9, 28);
+  const a = { id: 'assign:100', name: 'Assignment6', courseId: '30', code: 'MTH030', due: now + 86400000, overdue: false };
+  const other = { ...a, id: 'assign:101' };
+  assert.equal(classify([a, other], now).upcoming.length, 2);
+  const deadlines = [{ ...a, submitted: true }, other];
+  assert.deepEqual(classify(deadlines, now).upcoming.map(d => d.id), ['assign:101']);
+  const payload = buildPayload({ snapshot: { at: now, deadlines }, settings: DEFAULT_SETTINGS, now });
+  assert.deepEqual(payload.items.map(d => d.id), ['assign:101']);
+  assert.deepEqual(payload.doneAt, {}); // no personal tick is manufactured
+  assert.equal(classify([{ ...a, actionable: false }], now).upcoming.length, 1); // group/closed is unknown
+});
+
 test('course-page due dates parse as Beijing time', () => {
   assert.equal(parseDueDate('Opens: Monday, 2 November 2026, 00:00 Due: Sunday, 13 December 2026, 23:59'),
                Date.UTC(2026, 11, 13, 15, 59));

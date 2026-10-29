@@ -85,6 +85,20 @@ user also wants their agent to read Learning Mall directly (ask about deadlines 
 that is a separate, optional tool: [xjtlu-core-mcp](https://github.com/shanyuzhang/xjtlu-core-mcp),
 an MCP server with its own setup. Only install it if they ask for that.
 
+## Native menu-bar app (macOS)
+
+The native app and bridge live in a **separate repository**:
+[LM Bar](https://github.com/edward-lcl/lm-bar) (private; requires an authorized GitHub account).
+This extension repository alone does not contain `LM Bar.app`. For a new M3 Mac, follow the native
+README's two-sibling-clone build and guarded setup instructions. Clone this repository locally as
+`lm-companion`, beside `lm-bar`. The native combined builder includes the matching extension source;
+older release ZIPs are not automatically updated by a source push.
+
+When connected, the native app can be the main display while this extension handles browser sign-in,
+sync and reminders. Standalone extension mode remains available. Browser permission grants and
+Load unpacked are explicit user actions. No native binary release, notarization, permanent Firefox
+signature or automatic updater is implied by this source publication.
+
 ## Develop
 ```
 npm install
@@ -95,8 +109,9 @@ npm run build            # dist/…-chrome.zip and dist/…-firefox.zip
 (gitignored), so the parsers are tested against real markup without publishing anyone's data.
 
 ## Status
-v0.6, October 2026. Works end to end in Chrome and Edge against the live site. Not yet in a browser
-store. Built by an XJTLU student; not an official university tool.
+Source v0.7.1, October 2026. Includes native connection mode, correlated refresh/settings bridges,
+and completion-history handling. Synthetic tests do not establish clean-Mac or live-site acceptance
+for every browser. Not yet in a browser store. Built by an XJTLU student; not an official university tool.
 
 ## Credits
 Design informed by [xjtlu-core-mcp](https://github.com/shanyuzhang/xjtlu-core-mcp) (MIT), the

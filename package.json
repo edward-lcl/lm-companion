@@ -1,6 +1,6 @@
 {
   "name": "xjtlu-learning-mall-companion",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "description": "XJTLU Learning Mall (Moodle) deadlines, daily checklist and reminders browser extension.",

@@ -86,6 +86,25 @@ export function notificationKind(n) {
   return 'other';
 }
 
+// Status classes are Moodle's source evidence; completion ticks and actionability are not.
+export function parseAssignmentStatus(html, parseHTML) {
+  const table = parseHTML(html).querySelector('.submissionstatustable');
+  if (!table) throw new SiteChanged('assignment_status');
+  if (table.querySelector('.submissionstatussubmitted')) return { sourceStatus: 'submitted' };
+  if (table.querySelector('.submissionstatusdraft')) return { sourceStatus: 'draft' };
+  if (table.querySelector('.submissionstatusnew')) return { sourceStatus: 'not-submitted' };
+  return { sourceStatus: 'unknown' };
+}
+
+// Canonical read-only assignment view only. Never follow user-provided action/query URLs.
+export function assignmentPath(url) {
+  try {
+    const u = new URL(url);
+    if (u.origin !== BASE || u.pathname !== '/mod/assign/view.php' || !/^\d+$/.test(u.searchParams.get('id') || '')) return null;
+    return `/mod/assign/view.php?id=${u.searchParams.get('id')}`;
+  } catch { return null; }
+}
+
 export class Moodle {
   constructor({ fetch: f = fetch, parseHTML, parse }) {
     this.fetch = f;
@@ -94,8 +113,8 @@ export class Moodle {
     this.session = null;
   }
 
-  async page(path) {
-    const r = await this.fetch(BASE + path, { credentials: 'include', redirect: 'follow' });
+  async page(path, timeoutMs = 30000) {
+    const r = await this.fetch(BASE + path, { credentials: 'include', redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
     const html = await r.text();
     if (isLoginPage(r.url, html)) throw new SignedOut();
     if (!r.ok) throw new SiteChanged(`http_${r.status}:${path}`);
@@ -174,6 +193,13 @@ export class Moodle {
   async grades() {
     const html = await this.page('/grade/report/overview/index.php');
     return this.parse ? this.parse('gradeOverview', html) : parseGradeOverview(html, this.parseHTML);
+  }
+
+  async assignmentStatus(url) {
+    const path = assignmentPath(url);
+    if (!path) throw new SiteChanged('assignment_url');
+    const html = await this.page(path, 10000);
+    return this.parse ? this.parse('assignmentStatus', html) : parseAssignmentStatus(html, this.parseHTML);
   }
 
   async materials(courseId) {
